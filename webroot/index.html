@@ -58,6 +58,7 @@
           buddy.sendMsg(data)
 	  console.log("Outgoing message:" + data);
           $('<li class="list-group-item outgoing-msg">').text(data).appendTo($ul);
+	  $('#message').val("");
         });
       });
                 </script>

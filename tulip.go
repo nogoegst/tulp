@@ -14,6 +14,7 @@ const OTRFragmentSize = 140
 
 func OTRHandler(privKey otr3.PrivateKey) websocket.Handler {
     return func(ws *websocket.Conn) {
+	log.Printf("Got new connection. Awaiting OTR init from the source...")
 	conv := &otr3.Conversation{}
 	conv.SetOurKeys([]otr3.PrivateKey{privKey})
 	conv.Policies.RequireEncryption()
