@@ -5,19 +5,58 @@
 		<link rel="stylesheet" href="bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u">
 		<link rel="stylesheet" href="style.css">
 		<script src="jquery-3.1.0.min.js"></script>
+		<!-- Load dependencies -->
+		<script src="otr/build/dep/salsa20.js"></script>
+		<script src="otr/build/dep/bigint.js"></script>
+		<script src="otr/build/dep/crypto.js"></script>
+		<script src="otr/build/dep/eventemitter.js"></script>
+
+		<!-- Load otr.js or otr.min.js -->
+		<script src="otr/build/otr.js"></script>
                 <script>
       $(function() {
-        var $ul = $('#msg-list');
+	var $log = $('#log');
+	$log.text("Generating DSA key...\n");
+	var myKey = new DSA();
+	console.log(myKey)
+	$log.text("Your OTR fingerprint is "+myKey.fingerprint());
+       	var options = {
+	    fragment_size: 140
+	  , send_interval: 200
+	  , priv: myKey
+	}
+
+	var buddy = new OTR(options) 
+
+	buddy.on('ui', function (msg, encrypted, meta) {
+	  $('<li class="list-group-item">').text(msg).appendTo($ul);
+	  console.log("message to display to the user: " + msg)
+	  // encrypted === true, if the received msg was encrypted
+	})
+
+	buddy.on('io', function (msg, meta) {
+          ws.send(msg);
+	  console.log("message to send to buddy: " + msg)
+	})
+
+	buddy.on('error', function (err, severity) {
+	  if (severity === 'error')  // either 'error' or 'warn'
+	    console.error("error occurred: " + err)
+	})
+	buddy.REQUIRE_ENCRYPTION = true
+
+
+	var $ul = $('#msg-list');
         var ws = new WebSocket("ws://"+window.location.host+"/tulip");
         ws.onmessage = function(e) {
           console.log("Incoming message:" + e.data);
-          $('<li class="list-group-item">').text(e.data).appendTo($ul);
+          buddy.receiveMsg(e.data);
         };
 
         $('#sendBtn').click(function(){
           var data = $('#message').val();
-          ws.send(data);
-          console.log("Outgoing message:" + data);
+          buddy.sendMsg(data)
+	  console.log("Outgoing message:" + data);
           $('<li class="list-group-item outgoing-msg">').text(data).appendTo($ul);
         });
       });
@@ -29,6 +68,7 @@
 	<div class="col-lg-6">
 	<div class="panel panel-default">
 	 <div class="panel-heading">Welcome to tulip!</div>
+	 <div class="panel-body" id="log"></div>
 		<ul id="msg-list" class="list-group"></ul>
 		<div class="input-group">
 		 <input id="message" type="text" class="form-control" placeholder="Type your message"/>

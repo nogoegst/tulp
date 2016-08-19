@@ -2,33 +2,51 @@ package main
 
 import (
 	"log"
-	"fmt"
 	"net/http"
-	"crypto/sha256"
+	"crypto/rand"
+	//"encoding/base64"
+	"encoding/hex"
 	"golang.org/x/net/websocket"
+	"golang.org/x/crypto/otr"
 )
 
+const OTRFragmentSize = 140
+
 func echoHandler(ws *websocket.Conn) {
+	privKey := otr.PrivateKey{}
+	privKey.Generate(rand.Reader)
+	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
+	log.Println("Our fingerprint:", hex.EncodeToString(privKey.Fingerprint()))
+	conv := otr.Conversation{PrivateKey: &privKey, FragmentSize: OTRFragmentSize}
 	for {
 		data := make([]byte, 512)
 		n, err := ws.Read(data)
 		if err != nil {
 			log.Printf("Unable to read data: %v", err)
-			break
+			goto Exit
 		}
-		log.Printf("%s", data[:n])
-
-		sha_256 := sha256.New()
-		sha_256.Write(data[:n])
-		hashString := fmt.Sprintf("sha256: %x", sha_256.Sum(nil))
-
-		_, err = ws.Write([]byte(hashString))
+		log.Printf("Payload type: %d", ws.PayloadType)
+		msg, _, OTRSecChange, toSend, err := conv.Receive(data[:n])
 		if err != nil {
-			log.Printf("Unable to read data: %v", err)
-			break
+			log.Printf("Unable to recieve OTR message: %v", err)
+		}
+		switch OTRSecChange {
+		case otr.NewKeys:
+			log.Println("Their fingerprint:", hex.EncodeToString(conv.TheirPublicKey.Fingerprint()))
+		}
+		if len(msg) > 0 {
+			log.Printf("> %s", msg)
+		}
+		for _, outMsg := range toSend {
+			_, err = ws.Write(outMsg)
+			if err != nil {
+				log.Printf("Unable to read data: %v", err)
+				goto Exit
+			}
 		}
 	}
-	defer ws.Close()
+        Exit:
+	 defer ws.Close()
 }
 
 
