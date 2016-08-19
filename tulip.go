@@ -12,18 +12,14 @@ import (
 
 const OTRFragmentSize = 140
 
-func echoHandler(ws *websocket.Conn) {
+func OTRHandler(privKey otr3.PrivateKey) websocket.Handler {
+    return func(ws *websocket.Conn) {
 	conv := &otr3.Conversation{}
-	privKey := &otr3.DSAPrivateKey{}
-	privKey.Generate(rand.Reader)
-	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
-	log.Println("Our fingerprint:", hex.EncodeToString(privKey.Fingerprint()))
 	conv.SetOurKeys([]otr3.PrivateKey{privKey})
 	conv.Policies.RequireEncryption()
 	//c.Policies.AllowV2()
 	conv.Policies.AllowV3()
 
-	//conv := otr.Conversation{PrivateKey: &privKey, FragmentSize: OTRFragmentSize}
 	for {
 		data := make([]byte, 512)
 		n, err := ws.Read(data)
@@ -31,7 +27,6 @@ func echoHandler(ws *websocket.Conn) {
 			log.Printf("Unable to read data: %v", err)
 			goto Exit
 		}
-		log.Printf("Payload type: %d", ws.PayloadType)
 		msg, toSend, err := conv.Receive(data[:n])
 		if err != nil {
 			log.Printf("Unable to recieve OTR message: %v", err)
@@ -53,12 +48,19 @@ func echoHandler(ws *websocket.Conn) {
 	}
         Exit:
 	 defer ws.Close()
-}
+}}
 
 
 func main() {
 	log.Printf("Welcome to tulip!")
-	http.Handle("/tulip", websocket.Handler(echoHandler))
+
+	privKey := &otr3.DSAPrivateKey{}
+	privKey.Generate(rand.Reader)
+	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
+	log.Println("Our fingerprint:", hex.EncodeToString(privKey.Fingerprint()))
+
+
+	http.Handle("/tulip", websocket.Handler(OTRHandler(privKey)))
 	http.Handle("/", http.FileServer(http.Dir("webroot")))
 
 	log.Fatal(http.ListenAndServe(":8000", nil))
