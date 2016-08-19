@@ -53,13 +53,19 @@
           buddy.receiveMsg(e.data);
         };
 
-        $('#sendBtn').click(function(){
+        var $send = function(){
           var data = $('#message').val();
           if (data.length > 0) {
             buddy.sendMsg(data)
 	    console.log("Outgoing message:" + data);
             $('<li class="list-group-item outgoing-msg">').text(data).appendTo($ul);
 	    $('#message').val("");
+          }
+        }
+        $('#sendBtn').click($send);
+	$('#sendBtn').keypress(function(e) {
+          if (e.which == 13) {
+	    $send();
           }
         });
       });

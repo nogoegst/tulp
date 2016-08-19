@@ -37,7 +37,16 @@ func OTRHandler(privKey otr3.PrivateKey) websocket.Handler {
 			log.Println("Their fingerprint:", hex.EncodeToString(conv.TheirPublicKey.Fingerprint()))
 		}*/
 		if len(msg) > 0 {
-			log.Printf("> %s", msg)
+			log.Printf("< %s", msg)
+			outMsg := "Perfect Forward Secrecy"
+			outMsgToSend, err := conv.Send(otr3.ValidMessage(outMsg))
+			if err != nil {
+				log.Printf("Unable to process an outgoing message: %v", err)
+			}
+			if (len(outMsg) > 0) {
+				log.Printf("> %s", outMsg)
+			}
+			toSend = append(toSend, outMsgToSend...)
 		}
 		for _, outMsg := range toSend {
 			_, err = ws.Write(outMsg)
