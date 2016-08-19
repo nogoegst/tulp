@@ -55,10 +55,12 @@
 
         $('#sendBtn').click(function(){
           var data = $('#message').val();
-          buddy.sendMsg(data)
-	  console.log("Outgoing message:" + data);
-          $('<li class="list-group-item outgoing-msg">').text(data).appendTo($ul);
-	  $('#message').val("");
+          if (data.length > 0) {
+            buddy.sendMsg(data)
+	    console.log("Outgoing message:" + data);
+            $('<li class="list-group-item outgoing-msg">').text(data).appendTo($ul);
+	    $('#message').val("");
+          }
         });
       });
                 </script>
