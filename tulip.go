@@ -7,17 +7,23 @@ import (
 	//"encoding/base64"
 	"encoding/hex"
 	"golang.org/x/net/websocket"
-	"golang.org/x/crypto/otr"
+	"github.com/twstrike/otr3"
 )
 
 const OTRFragmentSize = 140
 
 func echoHandler(ws *websocket.Conn) {
-	privKey := otr.PrivateKey{}
+	conv := &otr3.Conversation{}
+	privKey := &otr3.DSAPrivateKey{}
 	privKey.Generate(rand.Reader)
 	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
 	log.Println("Our fingerprint:", hex.EncodeToString(privKey.Fingerprint()))
-	conv := otr.Conversation{PrivateKey: &privKey, FragmentSize: OTRFragmentSize}
+	conv.SetOurKeys([]otr3.PrivateKey{privKey})
+	conv.Policies.RequireEncryption()
+	//c.Policies.AllowV2()
+	conv.Policies.AllowV3()
+
+	//conv := otr.Conversation{PrivateKey: &privKey, FragmentSize: OTRFragmentSize}
 	for {
 		data := make([]byte, 512)
 		n, err := ws.Read(data)
@@ -26,14 +32,14 @@ func echoHandler(ws *websocket.Conn) {
 			goto Exit
 		}
 		log.Printf("Payload type: %d", ws.PayloadType)
-		msg, _, OTRSecChange, toSend, err := conv.Receive(data[:n])
+		msg, toSend, err := conv.Receive(data[:n])
 		if err != nil {
 			log.Printf("Unable to recieve OTR message: %v", err)
 		}
-		switch OTRSecChange {
+		/*switch OTRSecChange {
 		case otr.NewKeys:
 			log.Println("Their fingerprint:", hex.EncodeToString(conv.TheirPublicKey.Fingerprint()))
-		}
+		}*/
 		if len(msg) > 0 {
 			log.Printf("> %s", msg)
 		}
