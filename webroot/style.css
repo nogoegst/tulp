@@ -3,8 +3,16 @@
 }
 
 .fixed-panel {
-  min-height: 10;
-  max-height: 10;
+  height: 100%;
+}
+
+.fixed-panel-body {
+  min-height: 80%;
+  max-height: 80%;
   overflow-y: scroll;
 }
 
+.type-field {
+  position: relative;
+  width: 100%;
+}

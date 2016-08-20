@@ -15,6 +15,13 @@
 		<script src="otr/build/otr.js"></script>
                 <script>
       $(function() {
+
+window.setInterval(function() {
+  var elem = document.getElementById('chat');
+  elem.scrollTop = elem.scrollHeight;
+}, 5000);
+
+
 	var $log = $('#log');
 	$log.text("Generating DSA key...\n");
 	var myKey = new DSA();
@@ -74,19 +81,22 @@
 	</head>
 	<body>
 	<div class="row">
-	<div class="col-lg-6">
-	<div class="panel panel-default">
-	 <div class="panel-heading">Welcome to tulip!</div>
-	 <div class="panel-body" id="log"></div>
+	 <div class="col-lg-6">
+	  <div class="panel panel-default fixed-panel">
+	   <div class="panel-heading">Welcome to tulip!</div>
+	    <div class="panel-body fixed-panel-body" id="chat">
+		<span id="log"></span>
 		<ul id="msg-list" class="list-group"></ul>
-		<div class="input-group">
-		 <input id="message" type="text" class="form-control" placeholder="Type your message"/>
+	    </div>
+	    <div class="input-group type-field">
+		<input id="message" type="text" class="form-control" placeholder="Type your message"/>
 		<span class="input-group-btn">
 			<button id="sendBtn" class="btn btn-default" type="button">Send</button>
 		</span>
-		</div>
-		</div>
-	</div>
-	</div>
+	    </div>
+	   </div>
+	  </div>
+	 </div>
+        </div>
 	</body>
 </html>
