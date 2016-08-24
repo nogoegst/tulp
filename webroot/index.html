@@ -50,8 +50,10 @@ window.setInterval(function() {
 	  if (severity === 'error')  // either 'error' or 'warn'
 	    console.error("error occurred: " + err)
 	})
-	buddy.REQUIRE_ENCRYPTION = true
+	
 
+	buddy.REQUIRE_ENCRYPTION = true
+	buddy.sendQueryMsg()
 
 	var $ul = $('#msg-list');
         var ws = new WebSocket("ws://"+window.location.host+"/tulip");
