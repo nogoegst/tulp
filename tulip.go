@@ -7,10 +7,15 @@ import (
 	"strings"
 	"bytes"
 	"sync"
+	"strconv"
+	"flag"
+	"net"
 	"net/http"
 	"crypto/rand"
 	//"encoding/base64"
 	"encoding/hex"
+	"bulb"
+	bulb_utils "bulb/utils"
 	"golang.org/x/net/websocket"
 	"golang.org/x/crypto/ssh/terminal"
 	"github.com/twstrike/otr3"
@@ -142,9 +147,60 @@ func IncomingTalkHandler(ws *websocket.Conn) {
 	StartTalk(ws)
 }
 
+func GetPort() int {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		panic(err)
+	}
 
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
 func main() {
+	var debug_flag = flag.Bool("debug", false,
+		"Show what's happening")
+	var control = flag.String("control-addr", "tcp://127.0.0.1:9051",
+		"Set Tor control address to be used")
+	var control_passwd = flag.String("control-passwd", "",
+		"Set Tor control auth password")
+	flag.Parse()
+	debug := *debug_flag
+
 	log.Printf("Welcome to tulip!")
+    // Parse control string
+    control_net, control_addr, err := bulb_utils.ParseControlPortString(*control)
+    if err != nil {
+        log.Fatalf("Failed to parse Tor control address string: %v", err)
+    }
+    // Connect to a running tor instance.
+    c, err := bulb.Dial(control_net, control_addr)
+	if err != nil {
+		log.Fatalf("Failed to connect to control socket: %v", err)
+	}
+	defer c.Close()
+
+	// See what's really going on under the hood.
+	// Do not enable in production.
+	c.Debug(debug)
+
+	// Authenticate with the control port.  The password argument
+	// here can be "" if no password is set (CookieAuth, no auth).
+	if err := c.Authenticate(*control_passwd); err != nil {
+		log.Fatalf("Authentication failed: %v", err)
+	}
+
+	// At this point, c.Request() can be used to issue requests.
+	resp, err := c.Request("GETINFO version")
+	if err != nil {
+		log.Fatalf("GETINFO version failed: %v", err)
+	}
+	log.Printf("We're using tor %v", resp.Data[0])
+
+    c.StartAsyncReader()
 
 
 	privKey = &otr3.DSAPrivateKey{}
@@ -162,7 +218,18 @@ func main() {
 	http.Handle("/tulip", websocket.Handler(IncomingTalkHandler))
 	http.Handle("/", http.FileServer(http.Dir("webroot")))
 
-	go http.ListenAndServe(":8000", nil)
+	freePort := GetPort()
+	log.Printf("gotPort: %d", freePort)
+	go http.ListenAndServe(fmt.Sprintf(":%d", freePort), nil)//tring(freePort), nil)
+
+
+	onionPortSpec := []bulb.OnionPortSpec{bulb.OnionPortSpec{80,
+                           strconv.FormatUint((uint64)(freePort), 10)}}
+	onionInfo, err := c.AddOnion(onionPortSpec, nil, true)
+	if err != nil {
+		log.Fatalf("Error occured: %v", err)
+	}
+	log.Printf("You're at %v.onion", onionInfo.OnionID)
 /*
 	showIncoming := func() {
 		for {
