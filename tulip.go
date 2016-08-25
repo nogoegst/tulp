@@ -4,6 +4,7 @@ import (
 	"log"
 	"fmt"
 	"os"
+	"bytes"
 	"sync"
 	"net/http"
 	"crypto/rand"
@@ -15,6 +16,25 @@ import (
 )
 
 const OTRFragmentSize = 140
+
+type Person struct {
+        OTRFingerprints         [][]byte
+        OnionAddresses          []string
+}
+
+type AddressBook map[string]Person
+
+func LookUpAddressBookByFingerprint(abook *AddressBook, FP []byte) (name string) {
+	for name, person := range *abook {
+		for _, fp := range person.OTRFingerprints {
+			if bytes.Equal(fp, FP) {
+				return name
+			}
+		}
+	}
+	return name
+}
+
 
 type Talk struct {
 	Conversation	*otr3.Conversation
@@ -28,6 +48,7 @@ type Talk struct {
 
 
 var (
+	addressBook =	make(AddressBook)
 	CurrentTalk	*Talk
 	ToTerm		chan string
 )
@@ -46,8 +67,12 @@ func OTRReceive(talk *Talk) {
 		talk.toSend = append(talk.toSend, toSend...)
 		if len(msg) > 0 {
 			talk.incoming = append(talk.incoming, string(msg))
-
-			toTerm := fmt.Sprintf("%x: %s", talk.Conversation.GetTheirKey().Fingerprint(), talk.incoming[0])
+			fp := talk.Conversation.GetTheirKey().Fingerprint()
+			name := LookUpAddressBookByFingerprint(&addressBook, fp)
+			if (name=="") {
+				name = fmt.Sprintf("%x", fp)
+			}
+			toTerm := fmt.Sprintf("%s: %s", name, talk.incoming[0])
 			log.Printf("%s", toTerm)
 			talk.incoming = talk.incoming[1:]
 
@@ -117,6 +142,12 @@ func main() {
 	privKey.Generate(rand.Reader)
 	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
 	log.Println("Our fingerprint:", hex.EncodeToString(privKey.Fingerprint()))
+
+	browserFP, _ := hex.DecodeString("2264d806e7789a5773bdaffb798bcf3fdb456a81")
+	browserP := Person{OTRFingerprints: [][]byte{browserFP}}
+	addressBook["browser"] = browserP
+	log.Print(addressBook)
+
 
 
 	http.Handle("/tulip", websocket.Handler(OTRHandler(privKey)))
