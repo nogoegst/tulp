@@ -19,9 +19,11 @@ const OTRFragmentSize = 140
 type Talk struct {
 	Conversation	*otr3.Conversation
 	WebSocket	*websocket.Conn
+	wg		*sync.WaitGroup
 	toSend		[]otr3.ValidMessage
 	incoming	[]string
 	outgoing	[]string
+	finished	bool
 }
 
 
@@ -32,18 +34,16 @@ var (
 
 func OTRReceive(talk *Talk) {
 	data := make([]byte, 512)
-	for {
+	for !talk.finished {
 		n, err := talk.WebSocket.Read(data)
 		if err != nil {
-			//log.Printf("Unable to read data: %v", err)
-			return
+			goto Finish
 		}
 		msg, toSend, err := talk.Conversation.Receive(data[:n])
 		if err != nil {
 			log.Printf("Unable to recieve OTR message: %v", err)
 		}
 		talk.toSend = append(talk.toSend, toSend...)
-		//log.Printf("toSend from Receive: %v", toSend)
 		if len(msg) > 0 {
 			talk.incoming = append(talk.incoming, string(msg))
 
@@ -53,9 +53,12 @@ func OTRReceive(talk *Talk) {
 
 		}
 	}
+   Finish:
+	talk.finished = true
+	talk.wg.Done()
 }
 func OTRSend(talk *Talk) {
-	for {
+	for !talk.finished {
 		if len(talk.outgoing) > 0 {
 			outMsg := talk.outgoing[0]
 			talk.outgoing = talk.outgoing[1:]
@@ -68,16 +71,17 @@ func OTRSend(talk *Talk) {
 			}
 			talk.toSend = append(talk.toSend, toSend...)
 		}
-		//log.Printf("toSend: %v", talk.toSend)
 		for (len(talk.toSend) > 0) {
 			_, err := talk.WebSocket.Write(talk.toSend[0])
 			if err != nil {
-				log.Printf("Unable to write data: %v", err)
-				return
+				goto Finish
 			}
 			talk.toSend = talk.toSend[1:]
 		}
 	}
+   Finish:
+	talk.finished = true
+	talk.wg.Done()
 }
 
 func OTRHandler(privKey otr3.PrivateKey) websocket.Handler {
@@ -94,12 +98,14 @@ func OTRHandler(privKey otr3.PrivateKey) websocket.Handler {
 	defer ws.Close()
 
 	var wg sync.WaitGroup
+	talk.wg = &wg
 	wg.Add(2)
 
 	go OTRReceive(talk)
 	go OTRSend(talk)
 
 	wg.Wait()
+	log.Printf("Ended talk")
 }}
 
 
