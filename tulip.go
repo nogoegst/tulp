@@ -57,6 +57,7 @@ func getBestName(talk *Talk) (name string) {
 }
 
 var (
+	privKey		*otr3.DSAPrivateKey
 	addressBook =	make(AddressBook)
 	activeTalks	[]*Talk
 	CurrentTalk	*Talk
@@ -114,9 +115,7 @@ func OTRSend(talk *Talk) {
 	talk.wg.Done()
 }
 
-func OTRHandler(privKey otr3.PrivateKey) websocket.Handler {
-    return func(ws *websocket.Conn) {
-	log.Printf("Got new connection")
+func StartTalk(ws *websocket.Conn) {
 	talk := &Talk{}
 	activeTalks = append(activeTalks, talk)
 	CurrentTalk = talk
@@ -137,14 +136,18 @@ func OTRHandler(privKey otr3.PrivateKey) websocket.Handler {
 
 	wg.Wait()
 	log.Printf("Ended talk")
-}}
+}
+func IncomingTalkHandler(ws *websocket.Conn) {
+	log.Printf("Got new connection")
+	StartTalk(ws)
+}
 
 
 func main() {
 	log.Printf("Welcome to tulip!")
 
 
-	privKey := &otr3.DSAPrivateKey{}
+	privKey = &otr3.DSAPrivateKey{}
 	privKey.Generate(rand.Reader)
 	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
 	log.Println("Our fingerprint:", hex.EncodeToString(privKey.Fingerprint()))
@@ -156,7 +159,7 @@ func main() {
 
 
 
-	http.Handle("/tulip", websocket.Handler(OTRHandler(privKey)))
+	http.Handle("/tulip", websocket.Handler(IncomingTalkHandler))
 	http.Handle("/", http.FileServer(http.Dir("webroot")))
 
 	go http.ListenAndServe(":8000", nil)
@@ -196,6 +199,20 @@ func main() {
 				for _, talk := range activeTalks {
 					log.Printf("[*] %s", getBestName(talk))
 				}
+			case "connect":
+				if !strings.HasSuffix(args[1], ".onion") { //check existence!
+					log.Printf("It's not an onion address.")
+					break
+				}
+				onionAddress := args[1]
+				origin := "http://"+onionAddress+"/"
+				url := "ws://"+onionAddress+"/tulip"
+				ws, err := websocket.Dial(url, "", origin)
+				if err != nil {
+					log.Printf("Unable to connect")
+					break
+				}
+				go StartTalk(ws)
 			default:
 				log.Printf("No such command.")
 			}
