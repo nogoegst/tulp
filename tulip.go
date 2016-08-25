@@ -4,6 +4,7 @@ import (
 	"log"
 	"fmt"
 	"os"
+	"strings"
 	"bytes"
 	"sync"
 	"net/http"
@@ -46,9 +47,18 @@ type Talk struct {
 	finished	bool
 }
 
+func getBestName(talk *Talk) (name string) {
+	fp := talk.Conversation.GetTheirKey().Fingerprint()
+	name = LookUpAddressBookByFingerprint(&addressBook, fp)
+	if (name=="") {
+		name = fmt.Sprintf("%x", fp)
+	}
+	return name
+}
 
 var (
 	addressBook =	make(AddressBook)
+	activeTalks	[]*Talk
 	CurrentTalk	*Talk
 	ToTerm		chan string
 )
@@ -67,12 +77,7 @@ func OTRReceive(talk *Talk) {
 		talk.toSend = append(talk.toSend, toSend...)
 		if len(msg) > 0 {
 			talk.incoming = append(talk.incoming, string(msg))
-			fp := talk.Conversation.GetTheirKey().Fingerprint()
-			name := LookUpAddressBookByFingerprint(&addressBook, fp)
-			if (name=="") {
-				name = fmt.Sprintf("%x", fp)
-			}
-			toTerm := fmt.Sprintf("%s: %s", name, talk.incoming[0])
+			toTerm := fmt.Sprintf("%s: %s", getBestName(talk), talk.incoming[0])
 			log.Printf("%s", toTerm)
 			talk.incoming = talk.incoming[1:]
 
@@ -113,6 +118,7 @@ func OTRHandler(privKey otr3.PrivateKey) websocket.Handler {
     return func(ws *websocket.Conn) {
 	log.Printf("Got new connection")
 	talk := &Talk{}
+	activeTalks = append(activeTalks, talk)
 	CurrentTalk = talk
 	talk.Conversation = &otr3.Conversation{}
 	talk.Conversation.SetOurKeys([]otr3.PrivateKey{privKey})
@@ -182,6 +188,23 @@ func main() {
 		if err != nil {
 			log.Fatalf("Unable to read line from terminal: %v", err)
 		}
-		CurrentTalk.outgoing = append(CurrentTalk.outgoing, input)
+		if strings.HasPrefix(input, "/") {
+			cmdLine := strings.TrimPrefix(input, "/")
+			args := strings.Split(cmdLine, " ")
+			switch args[0] {
+			case "list":
+				for _, talk := range activeTalks {
+					log.Printf("[*] %s", getBestName(talk))
+				}
+			default:
+				log.Printf("No such command.")
+			}
+			continue
+		}
+		if (CurrentTalk != nil) {
+			CurrentTalk.outgoing = append(CurrentTalk.outgoing, input)
+		} else {
+			log.Printf("There is no active talk.")
+		}
 	}
 }
