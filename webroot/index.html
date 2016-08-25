@@ -23,9 +23,20 @@ window.setInterval(function() {
 
 
 	var $log = $('#log');
-	$log.text("Generating DSA key...\n");
-	var myKey = new DSA();
-	console.log(myKey)
+
+	var myKey;
+	var hash = window.location.hash;
+	var packedPrivKey = hash.substring(hash.indexOf('#')+1)
+	if (packedPrivKey === '') {
+		$log.text("Generating DSA key...\n");
+		myKey = new DSA();
+		packedPrivKey = myKey.packPrivate();
+		window.location.hash = packedPrivKey;
+	} else {
+		console.log(packedPrivKey)
+		myKey = DSA.parsePrivate(packedPrivKey);
+	}
+
 	$log.text("Your OTR fingerprint is "+myKey.fingerprint());
        	var options = {
 	    fragment_size: 200
