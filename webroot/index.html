@@ -34,6 +34,8 @@ window.setInterval(function() {
 	}
 
 	var buddy = new OTR(options) 
+	buddy.REQUIRE_ENCRYPTION = true
+	buddy.sendQueryMsg()
 
 	buddy.on('ui', function (msg, encrypted, meta) {
 	  $('<li class="list-group-item">').text(msg).appendTo($ul);
@@ -52,8 +54,6 @@ window.setInterval(function() {
 	})
 	
 
-	buddy.REQUIRE_ENCRYPTION = true
-	buddy.sendQueryMsg()
 
 	var $ul = $('#msg-list');
         var ws = new WebSocket("ws://"+window.location.host+"/tulip");
