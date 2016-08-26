@@ -16,7 +16,9 @@ import (
 	"encoding/hex"
 	"bulb"
 	bulb_utils "bulb/utils"
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
+	"h12.me/socks"
+	//"golang.org/x/net/websocket"
 	"golang.org/x/crypto/ssh/terminal"
 	"github.com/twstrike/otr3"
 )
@@ -67,16 +69,19 @@ var (
 	activeTalks	[]*Talk
 	CurrentTalk	*Talk
 	ToTerm		chan string
+	upgrader =	websocket.Upgrader{}
 )
 
 func OTRReceive(talk *Talk) {
-	data := make([]byte, 512)
 	for !talk.finished {
-		n, err := talk.WebSocket.Read(data)
+		mt, data, err := talk.WebSocket.ReadMessage()
+		if mt != websocket.TextMessage {
+			goto Finish
+		}
 		if err != nil {
 			goto Finish
 		}
-		msg, toSend, err := talk.Conversation.Receive(data[:n])
+		msg, toSend, err := talk.Conversation.Receive(data)
 		if err != nil {
 			log.Printf("Unable to recieve OTR message: %v", err)
 		}
@@ -108,7 +113,8 @@ func OTRSend(talk *Talk) {
 			talk.toSend = append(talk.toSend, toSend...)
 		}
 		for (len(talk.toSend) > 0) {
-			_, err := talk.WebSocket.Write(talk.toSend[0])
+			err := talk.WebSocket.WriteMessage(websocket.TextMessage,
+							      talk.toSend[0])
 			if err != nil {
 				goto Finish
 			}
@@ -130,7 +136,6 @@ func StartTalk(ws *websocket.Conn) {
 	//c.Policies.AllowV2()
 	talk.Conversation.Policies.AllowV3()
 	talk.WebSocket = ws
-	defer ws.Close()
 
 	var wg sync.WaitGroup
 	talk.wg = &wg
@@ -142,7 +147,13 @@ func StartTalk(ws *websocket.Conn) {
 	wg.Wait()
 	log.Printf("Ended talk")
 }
-func IncomingTalkHandler(ws *websocket.Conn) {
+func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("Unable to upgrade: %v", err)
+		return
+	}
+	defer ws.Close()
 	log.Printf("Got new connection")
 	StartTalk(ws)
 }
@@ -200,7 +211,7 @@ func main() {
 	}
 	log.Printf("We're using tor %v", resp.Data[0])
 
-    c.StartAsyncReader()
+	c.StartAsyncReader()
 
 
 	privKey = &otr3.DSAPrivateKey{}
@@ -215,7 +226,7 @@ func main() {
 
 
 
-	http.Handle("/tulip", websocket.Handler(IncomingTalkHandler))
+	http.HandleFunc("/tulip", IncomingTalkHandler)
 	http.Handle("/", http.FileServer(http.Dir("webroot")))
 
 	freePort := GetPort()
@@ -274,7 +285,11 @@ func main() {
 				onionAddress := args[1]
 				origin := "http://"+onionAddress+"/"
 				url := "ws://"+onionAddress+"/tulip"
-				ws, err := websocket.Dial(url, "", origin)
+				torDial := socks.DialSocksProxy(socks.SOCKS5, "127.0.0.1:9050")
+				dialer := websocket.Dialer{NetDial: torDial}
+				requestHeader := make(http.Header)
+				requestHeader.Set("Origin", origin)
+				ws, _, err := dialer.Dial(url, requestHeader)
 				if err != nil {
 					log.Printf("Unable to connect")
 					break
