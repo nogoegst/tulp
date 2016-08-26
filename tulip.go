@@ -283,12 +283,10 @@ func main() {
 					break
 				}
 				onionAddress := args[1]
-				origin := "http://"+onionAddress+"/"
 				url := "ws://"+onionAddress+"/tulip"
 				torDial := socks.DialSocksProxy(socks.SOCKS5, "127.0.0.1:9050")
 				dialer := websocket.Dialer{NetDial: torDial}
 				requestHeader := make(http.Header)
-				requestHeader.Set("Origin", origin)
 				ws, _, err := dialer.Dial(url, requestHeader)
 				if err != nil {
 					log.Printf("Unable to connect")
