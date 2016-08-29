@@ -283,7 +283,7 @@ func main() {
 				}
 				onionAddress := args[1]
 				url := "ws://"+onionAddress+"/tulip"
-				torDialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9050", nil, new(net.Dialer))
+				torDialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9050", nil, proxy.Direct)
 				if err != nil {
 					log.Printf("Unable to create a tor dialer: %v", err)
 					break
