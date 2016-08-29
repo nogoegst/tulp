@@ -17,8 +17,7 @@ import (
 	"bulb"
 	bulb_utils "bulb/utils"
 	"github.com/gorilla/websocket"
-	"h12.me/socks"
-	//"golang.org/x/net/websocket"
+	"golang.org/x/net/proxy"
 	"golang.org/x/crypto/ssh/terminal"
 	"github.com/twstrike/otr3"
 )
@@ -284,8 +283,12 @@ func main() {
 				}
 				onionAddress := args[1]
 				url := "ws://"+onionAddress+"/tulip"
-				torDial := socks.DialSocksProxy(socks.SOCKS5, "127.0.0.1:9050")
-				dialer := websocket.Dialer{NetDial: torDial}
+				torDialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9050", nil, new(net.Dialer))
+				if err != nil {
+					log.Printf("Unable to create a tor dialer: %v", err)
+					break
+				}
+				dialer := websocket.Dialer{NetDial: torDialer.Dial}
 				requestHeader := make(http.Header)
 				ws, _, err := dialer.Dial(url, requestHeader)
 				if err != nil {
