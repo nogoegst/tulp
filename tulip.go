@@ -68,7 +68,6 @@ var (
 	privKey		*otr3.DSAPrivateKey
 	addressBook =	make(AddressBook)
 	activeTalks =	make(map[string]*Talk)
-	CurrentTalk	*Talk
 	ToTerm		chan string
 	upgrader =	websocket.Upgrader{}
 )
@@ -158,7 +157,7 @@ func StartTalk(ws *websocket.Conn) {
 	go OTRSend(talk)
 
 	wg.Wait()
-	log.Printf("Ended talk")
+	log.Printf("Closed connection.")
 }
 func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
@@ -195,13 +194,13 @@ func main() {
 	debug := *debug_flag
 
 	log.Printf("Welcome to tulip!")
-    // Parse control string
-    control_net, control_addr, err := bulb_utils.ParseControlPortString(*control)
-    if err != nil {
-        log.Fatalf("Failed to parse Tor control address string: %v", err)
-    }
-    // Connect to a running tor instance.
-    c, err := bulb.Dial(control_net, control_addr)
+	// Parse control string
+	control_net, control_addr, err := bulb_utils.ParseControlPortString(*control)
+	if err != nil {
+	log.Fatalf("Failed to parse Tor control address string: %v", err)
+	}
+	// Connect to a running tor instance.
+	c, err := bulb.Dial(control_net, control_addr)
 	if err != nil {
 		log.Fatalf("Failed to connect to control socket: %v", err)
 	}
@@ -238,6 +237,7 @@ func main() {
 	log.Print(addressBook)
 
 
+	var currentTalk *Talk
 
 	http.HandleFunc("/tulip", IncomingTalkHandler)
 	http.Handle("/", http.FileServer(http.Dir("webroot")))
@@ -290,6 +290,12 @@ func main() {
 				for _, talk := range activeTalks {
 					log.Printf("[*] %s", talk.GetBestName())
 				}
+			case "":
+				if talk, ok := activeTalks[args[1]]; ok {
+					currentTalk = talk
+				} else {
+					log.Printf("No such talk.")
+				}
 			case "connect":
 				if !strings.HasSuffix(args[1], ".onion") { //check existence!
 					log.Printf("It's not an onion address.")
@@ -315,8 +321,8 @@ func main() {
 			}
 			continue
 		}
-		if (CurrentTalk != nil) {
-			CurrentTalk.outgoing = append(CurrentTalk.outgoing, input)
+		if (currentTalk != nil) {
+			currentTalk.outgoing = append(currentTalk.outgoing, input)
 		} else {
 			log.Printf("There is no active talk.")
 		}
