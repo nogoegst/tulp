@@ -44,6 +44,7 @@ func LookUpAddressBookByFingerprint(abook *AddressBook, FP []byte) (name string)
 
 
 type Talk struct {
+	lastKnownName	string
 	Conversation	*otr3.Conversation
 	WebSocket	*websocket.Conn
 	wg		*sync.WaitGroup
@@ -53,19 +54,20 @@ type Talk struct {
 	finished	bool
 }
 
-func getBestName(talk *Talk) (name string) {
+func (talk *Talk) GetBestName() (name string) {
 	fp := talk.Conversation.GetTheirKey().Fingerprint()
 	name = LookUpAddressBookByFingerprint(&addressBook, fp)
 	if (name=="") {
 		name = fmt.Sprintf("%x", fp)
 	}
+	talk.lastKnownName = name
 	return name
 }
 
 var (
 	privKey		*otr3.DSAPrivateKey
 	addressBook =	make(AddressBook)
-	activeTalks	[]*Talk
+	activeTalks =	make(map[string]*Talk)
 	CurrentTalk	*Talk
 	ToTerm		chan string
 	upgrader =	websocket.Upgrader{}
@@ -87,7 +89,7 @@ func OTRReceive(talk *Talk) {
 		talk.toSend = append(talk.toSend, toSend...)
 		if len(msg) > 0 {
 			talk.incoming = append(talk.incoming, string(msg))
-			toTerm := fmt.Sprintf("%s: %s", getBestName(talk), talk.incoming[0])
+			toTerm := fmt.Sprintf("%s: %s", talk.GetBestName(), talk.incoming[0])
 			log.Printf("%s", toTerm)
 			talk.incoming = talk.incoming[1:]
 
@@ -125,15 +127,27 @@ func OTRSend(talk *Talk) {
 	talk.wg.Done()
 }
 
+func (talk *Talk) HandleSecurityEvent(event otr3.SecurityEvent) {
+	log.Printf("%v", event.String())
+	switch event {
+	case otr3.GoneSecure:
+		log.Printf("name: %v", talk.GetBestName())
+		activeTalks[talk.GetBestName()] = talk
+	case otr3.GoneInsecure:
+		delete(activeTalks, talk.lastKnownName)
+		talk.finished = true
+	}
+}
+
 func StartTalk(ws *websocket.Conn) {
 	talk := &Talk{}
-	activeTalks = append(activeTalks, talk)
-	CurrentTalk = talk
 	talk.Conversation = &otr3.Conversation{}
 	talk.Conversation.SetOurKeys([]otr3.PrivateKey{privKey})
 	talk.Conversation.Policies.RequireEncryption()
 	//c.Policies.AllowV2()
 	talk.Conversation.Policies.AllowV3()
+	talk.Conversation.SetSecurityEventHandler(talk)
+
 	talk.WebSocket = ws
 
 	var wg sync.WaitGroup
@@ -230,7 +244,7 @@ func main() {
 
 	freePort := GetPort()
 	log.Printf("gotPort: %d", freePort)
-	go http.ListenAndServe(fmt.Sprintf(":%d", freePort), nil)//tring(freePort), nil)
+	go http.ListenAndServe(fmt.Sprintf(":%d", freePort), nil)
 
 
 	onionPortSpec := []bulb.OnionPortSpec{bulb.OnionPortSpec{80,
@@ -274,7 +288,7 @@ func main() {
 			switch args[0] {
 			case "list":
 				for _, talk := range activeTalks {
-					log.Printf("[*] %s", getBestName(talk))
+					log.Printf("[*] %s", talk.GetBestName())
 				}
 			case "connect":
 				if !strings.HasSuffix(args[1], ".onion") { //check existence!
