@@ -183,6 +183,12 @@ func GetPort() int {
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port
 }
+
+func WriteTermMessage(term *terminal.Terminal, msg string) {
+	toWrite := fmt.Sprintf("%s\n\r", msg)
+	term.Write([]byte(toWrite))
+}
+
 func main() {
 	var debug_flag = flag.Bool("debug", false,
 		"Show what's happening")
@@ -193,7 +199,18 @@ func main() {
 	flag.Parse()
 	debug := *debug_flag
 
-	log.Printf("Welcome to tulip!")
+	oldState, err := terminal.MakeRaw(0)
+	if err != nil {
+		panic(err)
+	}
+	defer terminal.Restore(0, oldState)
+	term := terminal.NewTerminal(os.Stdin, "")
+
+	term.SetBracketedPasteMode(true)
+	defer term.SetBracketedPasteMode(false)
+
+
+	WriteTermMessage(term, "Welcome to tulip!")
 	// Parse control string
 	control_net, control_addr, err := bulb_utils.ParseControlPortString(*control)
 	if err != nil {
@@ -221,25 +238,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("GETINFO version failed: %v", err)
 	}
-	log.Printf("We're using tor %v", resp.Data[0])
+	WriteTermMessage(term, fmt.Sprintf("We're using tor %v", resp.Data[0]))
 
 	c.StartAsyncReader()
 
-	fmt.Printf("Enter your passphrase for OTR identity: ")
-	otrPassphrase, err := terminal.ReadPassword(0)
+	otrPassphrase, err := term.ReadPassword(fmt.Sprintf("Enter your passphrase for OTR identity: "))
 	if err != nil {
 		log.Fatalf("Unable to read OTR passphrase: %v", err)
 	}
 	fmt.Printf("\n")
 
 	privKey = &otr3.DSAPrivateKey{}
-	err = privKey.Generate(DeriveKeystream(otrPassphrase, []byte("tulp-otr-keygen")))
+	err = privKey.Generate(DeriveKeystream([]byte(otrPassphrase), []byte("tulp-otr-keygen")))
 	if err != nil {
 		log.Fatalf("Unable to generate DSA key: %v", err)
 	}
 	//privKey.Generate(rand.Reader)
 	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
-	log.Printf("Our fingerprint: %x", privKey.Fingerprint())
+	WriteTermMessage(term, fmt.Sprintf("Our fingerprint: %x", privKey.Fingerprint()))
 
 	browserFP, _ := hex.DecodeString("2264d806e7789a5773bdaffb798bcf3fdb456a81")
 	browserP := Person{OTRFingerprints: [][]byte{browserFP}}
@@ -256,14 +272,13 @@ func main() {
 	log.Printf("gotPort: %d", freePort)
 	go http.ListenAndServe(fmt.Sprintf(":%d", freePort), nil)
 
-	fmt.Printf("Enter your passphrase for onion identity: ")
-	onionPassphrase, err := terminal.ReadPassword(0)
+	onionPassphrase, err := term.ReadPassword(fmt.Sprintf("Enter your passphrase for onion identity: "))
 	if err != nil {
 		log.Fatalf("Unable to read onion passphrase: %v", err)
 	}
 	fmt.Printf("\n")
 
-	privOnionKey, err := rsa.GenerateKey(DeriveKeystream(onionPassphrase, []byte("tulp-onion-keygen")), 1024)
+	privOnionKey, err := rsa.GenerateKey(DeriveKeystream([]byte(onionPassphrase), []byte("tulp-onion-keygen")), 1024)
 	if err != nil {
 		log.Fatalf("Unable to generate onion key: %v", err)
 	}
@@ -282,13 +297,6 @@ func main() {
 	}
 	go showIncoming()
 */
-	oldState, err := terminal.MakeRaw(0)
-	if err != nil {
-		panic(err)
-	}
-	defer terminal.Restore(0, oldState)
-
-	term := terminal.NewTerminal(os.Stdin, "")
 	go func() {
 		for {
 			toTerm := <-ToTerm
@@ -315,7 +323,7 @@ func main() {
 				if talk, ok := activeTalks[args[1]]; ok {
 					currentTalk = talk
 				} else {
-					log.Printf("No such talk.")
+					WriteTermMessage(term, "No such talk.")
 				}
 			case "connect":
 				if !strings.HasSuffix(args[1], ".onion") { //check existence!
