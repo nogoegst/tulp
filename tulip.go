@@ -68,7 +68,7 @@ var (
 	privKey		*otr3.DSAPrivateKey
 	addressBook =	make(AddressBook)
 	activeTalks =	make(map[string]*Talk)
-	ToTerm		chan string
+	ToTerm =	make(chan string)
 	upgrader =	websocket.Upgrader{}
 )
 
@@ -89,7 +89,7 @@ func OTRReceive(talk *Talk) {
 		if len(msg) > 0 {
 			talk.incoming = append(talk.incoming, string(msg))
 			toTerm := fmt.Sprintf("%s: %s", talk.GetBestName(), talk.incoming[0])
-			log.Printf("%s", toTerm)
+			ToTerm <- toTerm
 			talk.incoming = talk.incoming[1:]
 
 		}
@@ -108,7 +108,7 @@ func OTRSend(talk *Talk) {
 				log.Printf("Unable to process an outgoing message: %v", err)
 			}
 			if (len(outMsg) > 0) {
-				log.Printf("> %s", outMsg)
+				ToTerm <- fmt.Sprintf("> %s", outMsg)
 			}
 			talk.toSend = append(talk.toSend, toSend...)
 		}
@@ -299,9 +299,7 @@ func main() {
 */
 	go func() {
 		for {
-			toTerm := <-ToTerm
-			log.Printf("%s", toTerm)
-			//term.Write([]byte(<-toTerm))
+			WriteTermMessage(term, <-ToTerm)
 		}
 	}()
 
@@ -353,7 +351,7 @@ func main() {
 		if (currentTalk != nil) {
 			currentTalk.outgoing = append(currentTalk.outgoing, input)
 		} else {
-			log.Printf("There is no active talk.")
+			WriteTermMessage(term, "There is no active talk.")
 		}
 	}
 }
