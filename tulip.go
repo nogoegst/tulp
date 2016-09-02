@@ -230,9 +230,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to read OTR passphrase: %v", err)
 	}
+	fmt.Printf("\n")
 
 	privKey = &otr3.DSAPrivateKey{}
-	err = privKey.Generate(DeriveKeystream(otrPassphrase))
+	err = privKey.Generate(DeriveKeystream(otrPassphrase, []byte("tulp-otr-keygen")))
 	if err != nil {
 		log.Fatalf("Unable to generate DSA key: %v", err)
 	}
@@ -260,8 +261,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to read onion passphrase: %v", err)
 	}
+	fmt.Printf("\n")
 
-	privOnionKey, err := rsa.GenerateKey(DeriveKeystream(onionPassphrase), 1024)
+	privOnionKey, err := rsa.GenerateKey(DeriveKeystream(onionPassphrase, []byte("tulp-onion-keygen")), 1024)
 	if err != nil {
 		log.Fatalf("Unable to generate onion key: %v", err)
 	}
