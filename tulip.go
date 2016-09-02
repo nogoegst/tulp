@@ -11,7 +11,7 @@ import (
 	"flag"
 	"net"
 	"net/http"
-	"crypto/rand"
+	"crypto/rsa"
 	//"encoding/base64"
 	"encoding/hex"
 	"bulb"
@@ -225,11 +225,20 @@ func main() {
 
 	c.StartAsyncReader()
 
+	fmt.Printf("Enter your passphrase for OTR identity: ")
+	otrPassphrase, err := terminal.ReadPassword(0)
+	if err != nil {
+		log.Fatalf("Unable to read OTR passphrase: %v", err)
+	}
 
 	privKey = &otr3.DSAPrivateKey{}
-	privKey.Generate(rand.Reader)
+	err = privKey.Generate(DeriveKeystream(otrPassphrase))
+	if err != nil {
+		log.Fatalf("Unable to generate DSA key: %v", err)
+	}
+	//privKey.Generate(rand.Reader)
 	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
-	log.Println("Our fingerprint:", hex.EncodeToString(privKey.Fingerprint()))
+	log.Printf("Our fingerprint: %x", privKey.Fingerprint())
 
 	browserFP, _ := hex.DecodeString("2264d806e7789a5773bdaffb798bcf3fdb456a81")
 	browserP := Person{OTRFingerprints: [][]byte{browserFP}}
@@ -246,10 +255,20 @@ func main() {
 	log.Printf("gotPort: %d", freePort)
 	go http.ListenAndServe(fmt.Sprintf(":%d", freePort), nil)
 
+	fmt.Printf("Enter your passphrase for onion identity: ")
+	onionPassphrase, err := terminal.ReadPassword(0)
+	if err != nil {
+		log.Fatalf("Unable to read onion passphrase: %v", err)
+	}
+
+	privOnionKey, err := rsa.GenerateKey(DeriveKeystream(onionPassphrase), 1024)
+	if err != nil {
+		log.Fatalf("Unable to generate onion key: %v", err)
+	}
 
 	onionPortSpec := []bulb.OnionPortSpec{bulb.OnionPortSpec{80,
                            strconv.FormatUint((uint64)(freePort), 10)}}
-	onionInfo, err := c.AddOnion(onionPortSpec, nil, true)
+	onionInfo, err := c.AddOnion(onionPortSpec, privOnionKey, true)
 	if err != nil {
 		log.Fatalf("Error occured: %v", err)
 	}
