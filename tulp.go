@@ -1,32 +1,32 @@
 package main
 
 import (
-	"log"
-	"fmt"
-	"os"
-	"strings"
 	"bytes"
-	"sync"
-	"strconv"
+	"encoding/hex"
 	"flag"
+	"fmt"
+	"log"
 	"net"
 	"net/http"
-	"encoding/hex"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
 
-	"github.com/nogoegst/onionutil"
+	"github.com/gorilla/websocket"
 	"github.com/nogoegst/bulb"
 	bulb_utils "github.com/nogoegst/bulb/utils"
-	"github.com/gorilla/websocket"
-	"golang.org/x/net/proxy"
-	"golang.org/x/crypto/ssh/terminal"
+	"github.com/nogoegst/onionutil"
 	"github.com/twstrike/otr3"
+	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/net/proxy"
 )
 
 const OTRFragmentSize = 140
 
 type Person struct {
-        OTRFingerprints         [][]byte
-        OnionAddresses          []string
+	OTRFingerprints [][]byte
+	OnionAddresses  []string
 }
 
 type AddressBook map[string]Person
@@ -42,22 +42,21 @@ func LookUpAddressBookByFingerprint(abook *AddressBook, FP []byte) (name string)
 	return name
 }
 
-
 type Talk struct {
-	lastKnownName	string
-	Conversation	*otr3.Conversation
-	WebSocket	*websocket.Conn
-	wg		*sync.WaitGroup
-	toSend		[]otr3.ValidMessage
-	incoming	[]string
-	outgoing	[]string
-	finished	bool
+	lastKnownName string
+	Conversation  *otr3.Conversation
+	WebSocket     *websocket.Conn
+	wg            *sync.WaitGroup
+	toSend        []otr3.ValidMessage
+	incoming      []string
+	outgoing      []string
+	finished      bool
 }
 
 func (talk *Talk) GetBestName() (name string) {
 	fp := talk.Conversation.GetTheirKey().Fingerprint()
 	name = LookUpAddressBookByFingerprint(&addressBook, fp)
-	if (name=="") {
+	if name == "" {
 		name = fmt.Sprintf("%x", fp)
 	}
 	talk.lastKnownName = name
@@ -65,11 +64,11 @@ func (talk *Talk) GetBestName() (name string) {
 }
 
 var (
-	privKey		*otr3.DSAPrivateKey
-	addressBook =	make(AddressBook)
-	activeTalks =	make(map[string]*Talk)
-	ToTerm =	make(chan string)
-	upgrader =	websocket.Upgrader{}
+	privKey     *otr3.DSAPrivateKey
+	addressBook = make(AddressBook)
+	activeTalks = make(map[string]*Talk)
+	ToTerm      = make(chan string)
+	upgrader    = websocket.Upgrader{}
 )
 
 func OTRReceive(talk *Talk) {
@@ -94,7 +93,7 @@ func OTRReceive(talk *Talk) {
 
 		}
 	}
-   Finish:
+Finish:
 	talk.finished = true
 	talk.wg.Done()
 }
@@ -107,21 +106,21 @@ func OTRSend(talk *Talk) {
 			if err != nil {
 				log.Printf("Unable to process an outgoing message: %v", err)
 			}
-			if (len(outMsg) > 0) {
+			if len(outMsg) > 0 {
 				ToTerm <- fmt.Sprintf("> %s", outMsg)
 			}
 			talk.toSend = append(talk.toSend, toSend...)
 		}
-		for (len(talk.toSend) > 0) {
+		for len(talk.toSend) > 0 {
 			err := talk.WebSocket.WriteMessage(websocket.TextMessage,
-							      talk.toSend[0])
+				talk.toSend[0])
 			if err != nil {
 				goto Finish
 			}
 			talk.toSend = talk.toSend[1:]
 		}
 	}
-   Finish:
+Finish:
 	talk.finished = true
 	talk.wg.Done()
 }
@@ -209,12 +208,11 @@ func main() {
 	term.SetBracketedPasteMode(true)
 	defer term.SetBracketedPasteMode(false)
 
-
 	WriteTermMessage(term, "Welcome to tulip!")
 	// Parse control string
 	control_net, control_addr, err := bulb_utils.ParseControlPortString(*control)
 	if err != nil {
-	log.Fatalf("Failed to parse Tor control address string: %v", err)
+		log.Fatalf("Failed to parse Tor control address string: %v", err)
 	}
 	// Connect to a running tor instance.
 	c, err := bulb.Dial(control_net, control_addr)
@@ -262,7 +260,6 @@ func main() {
 	addressBook["browser"] = browserP
 	log.Print(addressBook)
 
-
 	var currentTalk *Talk
 
 	http.HandleFunc("/tulip", IncomingTalkHandler)
@@ -284,19 +281,19 @@ func main() {
 	}
 
 	onionPortSpec := []bulb.OnionPortSpec{bulb.OnionPortSpec{80,
-                           strconv.FormatUint((uint64)(freePort), 10)}}
+		strconv.FormatUint((uint64)(freePort), 10)}}
 	onionInfo, err := c.AddOnion(onionPortSpec, privOnionKey, true)
 	if err != nil {
 		log.Fatalf("Error occured: %v", err)
 	}
 	log.Printf("You're at %v.onion", onionInfo.OnionID)
-/*
-	showIncoming := func() {
-		for {
+	/*
+		showIncoming := func() {
+			for {
+			}
 		}
-	}
-	go showIncoming()
-*/
+		go showIncoming()
+	*/
 	go func() {
 		for {
 			WriteTermMessage(term, <-ToTerm)
@@ -329,7 +326,7 @@ func main() {
 					break
 				}
 				onionAddress := args[1]
-				url := "ws://"+onionAddress+"/tulip"
+				url := "ws://" + onionAddress + "/tulip"
 				torDialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9050", nil, proxy.Direct)
 				if err != nil {
 					log.Printf("Unable to create a tor dialer: %v", err)
@@ -348,7 +345,7 @@ func main() {
 			}
 			continue
 		}
-		if (currentTalk != nil) {
+		if currentTalk != nil {
 			currentTalk.outgoing = append(currentTalk.outgoing, input)
 		} else {
 			WriteTermMessage(term, "There is no active talk.")
