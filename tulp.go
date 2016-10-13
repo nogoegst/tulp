@@ -11,11 +11,11 @@ import (
 	"flag"
 	"net"
 	"net/http"
-	"crypto/rsa"
-	//"encoding/base64"
 	"encoding/hex"
-	"bulb"
-	bulb_utils "bulb/utils"
+
+	"github.com/nogoegst/onionutil"
+	"github.com/nogoegst/bulb"
+	bulb_utils "github.com/nogoegst/bulb/utils"
 	"github.com/gorilla/websocket"
 	"golang.org/x/net/proxy"
 	"golang.org/x/crypto/ssh/terminal"
@@ -249,7 +249,7 @@ func main() {
 	fmt.Printf("\n")
 
 	privKey = &otr3.DSAPrivateKey{}
-	err = privKey.Generate(DeriveKeystream([]byte(otrPassphrase), []byte("tulp-otr-keygen")))
+	err = privKey.Generate(onionutil.KeystreamReader([]byte(otrPassphrase), []byte("tulp-otr-keygen")))
 	if err != nil {
 		log.Fatalf("Unable to generate DSA key: %v", err)
 	}
@@ -278,7 +278,7 @@ func main() {
 	}
 	fmt.Printf("\n")
 
-	privOnionKey, err := rsa.GenerateKey(DeriveKeystream([]byte(onionPassphrase), []byte("tulp-onion-keygen")), 1024)
+	privOnionKey, err := onionutil.GenerateOnionKey(onionutil.KeystreamReader([]byte(onionPassphrase), []byte("tulp-onion-keygen")))
 	if err != nil {
 		log.Fatalf("Unable to generate onion key: %v", err)
 	}
