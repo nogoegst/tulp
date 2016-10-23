@@ -15,9 +15,9 @@ type Talk struct {
 	lastKnownName string
 	Conversation  *otr3.Conversation
 	WebSocket     *websocket.Conn
-	toSend        []otr3.ValidMessage
-	incoming      []string
-	outgoing      []string
+	toSend        chan otr3.ValidMessage
+	incoming      chan string
+	outgoing      chan string
 	finished      bool
 }
 
@@ -46,50 +46,50 @@ func (talk *Talk) OTRReceiveLoop() {
 	for !talk.finished {
 		mt, data, err := talk.WebSocket.ReadMessage()
 		if mt != websocket.TextMessage {
-			goto Finish
+			talk.finished = true
+			continue
 		}
 		if err != nil {
-			goto Finish
+			talk.finished = true
+			continue
 		}
 		msg, toSend, err := talk.Conversation.Receive(data)
 		if err != nil {
 			log.Printf("Unable to recieve OTR message: %v", err)
 		}
-		talk.toSend = append(talk.toSend, toSend...)
+		for _, ciphertext := range toSend {
+			talk.toSend <- ciphertext
+		}
 		if len(msg) > 0 {
-			talk.incoming = append(talk.incoming, string(msg))
-			toTerm := fmt.Sprintf("%s: %s", talk.GetBestName(), talk.incoming[0])
-			ToTerm <- toTerm
-			talk.incoming = talk.incoming[1:]
-
+			talk.incoming <- string(msg)
 		}
 	}
-Finish:
-	talk.finished = true
 }
 
 func (talk *Talk) OTRSendLoop() {
-	for !talk.finished {
-		if len(talk.outgoing) > 0 {
-			outMsg := talk.outgoing[0]
-			talk.outgoing = talk.outgoing[1:]
+	go func(){
+		for !talk.finished {
+			outMsg := <-talk.outgoing
 			toSend, err := talk.Conversation.Send(otr3.ValidMessage(outMsg))
 			if err != nil {
 				log.Printf("Unable to process an outgoing message: %v", err)
 			}
-			talk.toSend = append(talk.toSend, toSend...)
-		}
-		for len(talk.toSend) > 0 {
-			err := talk.WebSocket.WriteMessage(websocket.TextMessage,
-				talk.toSend[0])
-			if err != nil {
-				goto Finish
+			for _, ciphertext := range toSend {
+				talk.toSend <- ciphertext
 			}
-			talk.toSend = talk.toSend[1:]
 		}
-	}
-Finish:
-	talk.finished = true
+	}()
+	go func(){
+		for !talk.finished {
+			msgToSend := <-talk.toSend
+			err := talk.WebSocket.WriteMessage(websocket.TextMessage,
+				msgToSend)
+			if err != nil {
+				talk.finished = true
+				continue
+			}
+		}
+	}()
 }
 
 func (talk *Talk) HandleSecurityEvent(event otr3.SecurityEvent) {

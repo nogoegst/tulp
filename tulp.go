@@ -20,11 +20,14 @@ import (
 
 var term *terminal.Terminal
 
+const messageBacklog = 64
+
 func NewTalk(ws *websocket.Conn) (talk *Talk) {
 	talk = &Talk{}
-	if ws == nil {
-		critical(term, "ws is nil")
-	}
+
+	talk.outgoing = make(chan string, messageBacklog)
+	talk.incoming = make(chan string, messageBacklog)
+	talk.toSend = make(chan otr3.ValidMessage, messageBacklog)
 	talk.WebSocket = ws
 
 	conversation := &otr3.Conversation{}
@@ -37,7 +40,6 @@ func NewTalk(ws *websocket.Conn) (talk *Talk) {
 
 	go talk.OTRReceiveLoop()
 	go talk.OTRSendLoop()
-
 	return talk
 }
 func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +49,14 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	info(term, "Got new connection")
-	_ = NewTalk(ws)
+	talk := NewTalk(ws)
+	// Collect messages to terminal
+	go func(){
+		for {
+			inMsg := <-talk.incoming
+			ToTerm <- fmt.Sprintf("%s: %s", talk.GetBestName(), inMsg)
+		}
+	}()
 }
 
 
@@ -214,14 +223,14 @@ func main() {
 					alert(term, "Unable to connect")
 					break
 				}
-				_ := NewTalk(ws)
+				_ = NewTalk(ws)
 			default:
 				warn(term, "No such command.")
 			}
 			continue
 		}
 		if currentTalk != nil {
-			currentTalk.outgoing = append(currentTalk.outgoing, input)
+			currentTalk.outgoing <-input
 		} else {
 			warn(term, "There is no active talk.")
 		}
