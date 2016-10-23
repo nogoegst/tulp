@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,10 +12,10 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/twstrike/otr3"
 	"github.com/nogoegst/bulb"
 	bulb_utils "github.com/nogoegst/bulb/utils"
 	"github.com/nogoegst/onionutil"
-	"github.com/twstrike/otr3"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/proxy"
 )
@@ -54,19 +53,6 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	StartTalk(ws)
 }
 
-func GetPort() int {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		panic(err)
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		panic(err)
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
-}
 
 func WriteTermMessage(term *terminal.Terminal, msg string) {
 	toWrite := fmt.Sprintf("%s\n\r", msg)
