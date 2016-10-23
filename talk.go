@@ -57,13 +57,6 @@ func (talk *Talk) GetBestName() (name string) {
 	return name
 }
 
-var (
-	privKey     *otr3.DSAPrivateKey
-	addressBook = make(AddressBook)
-	activeTalks = make(map[string]*Talk)
-	upgrader    = websocket.Upgrader{}
-)
-
 func (talk *Talk) OTRReceiveLoop() {
 	for !talk.finished {
 		mt, data, err := talk.WebSocket.ReadMessage()

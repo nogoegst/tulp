@@ -18,7 +18,13 @@ import (
 	"golang.org/x/net/proxy"
 )
 
-var term *terminal.Terminal
+var(
+	term *terminal.Terminal
+	upgrader = websocket.Upgrader{}
+	activeTalks = make(map[string]*Talk)
+	privKey     *otr3.DSAPrivateKey
+	addressBook = make(AddressBook)
+)
 
 func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
