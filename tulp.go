@@ -37,6 +37,22 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func connectToOnion(onionAddress string) () {
+	url := "ws://" + onionAddress + "/tulip"
+	torDialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9050", nil, proxy.Direct)
+	if err != nil {
+		alert(term, "Unable to create a tor dialer: %v", err)
+		return
+	}
+	dialer := websocket.Dialer{NetDial: torDialer.Dial}
+	requestHeader := make(http.Header)
+	ws, _, err := dialer.Dial(url, requestHeader)
+	if err != nil {
+		alert(term, "Unable to connect")
+		return
+	}
+	_ = NewTalk(ws)
+}
 
 func main() {
 	var debug_flag = flag.Bool("debug", false,
@@ -188,20 +204,7 @@ func main() {
 					break
 				}
 				onionAddress := args[1]
-				url := "ws://" + onionAddress + "/tulip"
-				torDialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9050", nil, proxy.Direct)
-				if err != nil {
-					alert(term, "Unable to create a tor dialer: %v", err)
-					break
-				}
-				dialer := websocket.Dialer{NetDial: torDialer.Dial}
-				requestHeader := make(http.Header)
-				ws, _, err := dialer.Dial(url, requestHeader)
-				if err != nil {
-					alert(term, "Unable to connect")
-					break
-				}
-				_ = NewTalk(ws)
+				go connectToOnion(onionAddress)
 			default:
 				warn(term, "No such command.")
 			}
