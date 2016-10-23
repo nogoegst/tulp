@@ -20,28 +20,6 @@ import (
 
 var term *terminal.Terminal
 
-const messageBacklog = 64
-
-func NewTalk(ws *websocket.Conn) (talk *Talk) {
-	talk = &Talk{}
-
-	talk.outgoing = make(chan string, messageBacklog)
-	talk.incoming = make(chan string, messageBacklog)
-	talk.toSend = make(chan otr3.ValidMessage, messageBacklog)
-	talk.WebSocket = ws
-
-	conversation := &otr3.Conversation{}
-	conversation.SetOurKeys([]otr3.PrivateKey{privKey})
-	conversation.Policies.RequireEncryption()
-	//c.Policies.AllowV2()
-	conversation.Policies.AllowV3()
-	conversation.SetSecurityEventHandler(talk)
-	talk.Conversation = conversation
-
-	go talk.OTRReceiveLoop()
-	go talk.OTRSendLoop()
-	return talk
-}
 func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
