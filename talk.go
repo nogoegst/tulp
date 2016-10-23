@@ -66,8 +66,8 @@ func (talk *Talk) OTRReceiveLoop() {
 	}
 Finish:
 	talk.finished = true
-	//talk.wg.Done()
 }
+
 func (talk *Talk) OTRSendLoop() {
 	for !talk.finished {
 		if len(talk.outgoing) > 0 {
@@ -76,9 +76,6 @@ func (talk *Talk) OTRSendLoop() {
 			toSend, err := talk.Conversation.Send(otr3.ValidMessage(outMsg))
 			if err != nil {
 				log.Printf("Unable to process an outgoing message: %v", err)
-			}
-			if len(outMsg) > 0 {
-				ToTerm <- fmt.Sprintf("> %s", outMsg)
 			}
 			talk.toSend = append(talk.toSend, toSend...)
 		}
@@ -93,7 +90,6 @@ func (talk *Talk) OTRSendLoop() {
 	}
 Finish:
 	talk.finished = true
-	//talk.wg.Done()
 }
 
 func (talk *Talk) HandleSecurityEvent(event otr3.SecurityEvent) {

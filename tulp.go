@@ -54,6 +54,8 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	var debug_flag = flag.Bool("debug", false,
 		"Show what's happening")
+	var localFlag = flag.Bool("local", false,
+		"Run locally (offline)")
 	var control = flag.String("control-addr", "tcp://127.0.0.1:9051",
 		"Set Tor control address to be used")
 	var control_passwd = flag.String("control-passwd", "",
@@ -74,42 +76,17 @@ func main() {
 	defer term.SetBracketedPasteMode(false)
 
 	info(term, "Welcome to tulip!")
+
 	// Parse control string
 	control_net, control_addr, err := bulb_utils.ParseControlPortString(*control)
 	if err != nil {
 		critical(term, "Failed to parse Tor control address string: %v", err)
 	}
-	// Connect to a running tor instance.
-	c, err := bulb.Dial(control_net, control_addr)
-	if err != nil {
-		critical(term, "Failed to connect to control socket: %v", err)
-	}
-	defer c.Close()
-
-	// See what's really going on under the hood.
-	// Do not enable in production.
-	c.Debug(debug)
-
-	// Authenticate with the control port.  The password argument
-	// here can be "" if no password is set (CookieAuth, no auth).
-	if err := c.Authenticate(*control_passwd); err != nil {
-		critical(term, "Authentication failed: %v", err)
-	}
-
-	// At this point, c.Request() can be used to issue requests.
-	resp, err := c.Request("GETINFO version")
-	if err != nil {
-		critical(term, "GETINFO version failed: %v", err)
-	}
-	info(term, "We're using tor %v", resp.Data[0])
-
-	c.StartAsyncReader()
 
 	otrPassphrase, err := term.ReadPassword(fmt.Sprintf("Enter your passphrase for OTR identity: "))
 	if err != nil {
 		critical(term, "Unable to read OTR passphrase: %v", err)
 	}
-	fmt.Printf("\n")
 
 	privKey = &otr3.DSAPrivateKey{}
 	err = privKey.Generate(onionutil.KeystreamReader([]byte(otrPassphrase), []byte("tulp-otr-keygen")))
@@ -134,23 +111,52 @@ func main() {
 	info(term, "gotPort: %d", freePort)
 	go http.ListenAndServe(fmt.Sprintf(":%d", freePort), nil)
 
-	onionPassphrase, err := term.ReadPassword(fmt.Sprintf("Enter your passphrase for onion identity: "))
-	if err != nil {
-		critical(term, "Unable to read onion passphrase: %v", err)
+	if !(*localFlag) {
+		// Connect to a running tor instance.
+		c, err := bulb.Dial(control_net, control_addr)
+		if err != nil {
+			critical(term, "Failed to connect to control socket: %v", err)
+		}
+		defer c.Close()
+
+		// See what's really going on under the hood.
+		// Do not enable in production.
+		c.Debug(debug)
+
+		// Authenticate with the control port.  The password argument
+		// here can be "" if no password is set (CookieAuth, no auth).
+		if err := c.Authenticate(*control_passwd); err != nil {
+			critical(term, "Authentication failed: %v", err)
+		}
+
+		// At this point, c.Request() can be used to issue requests.
+		resp, err := c.Request("GETINFO version")
+		if err != nil {
+			critical(term, "GETINFO version failed: %v", err)
+		}
+		info(term, "We're using tor %v", resp.Data[0])
+
+		c.StartAsyncReader()
+
+		onionPassphrase, err := term.ReadPassword(fmt.Sprintf("Enter your passphrase for onion identity: "))
+		if err != nil {
+			critical(term, "Unable to read onion passphrase: %v", err)
+		}
+
+		privOnionKey, err := onionutil.GenerateOnionKey(onionutil.KeystreamReader([]byte(onionPassphrase), []byte("tulp-onion-keygen")))
+		if err != nil {
+			critical(term, "Unable to generate onion key: %v", err)
+		}
+
+		onionPortSpec := []bulb.OnionPortSpec{bulb.OnionPortSpec{80,
+			strconv.FormatUint((uint64)(freePort), 10)}}
+		onionInfo, err := c.AddOnion(onionPortSpec, privOnionKey, true)
+		if err != nil {
+			critical(term, "Error occured: %v", err)
+		}
+		info(term, "You're at %v.onion", onionInfo.OnionID)
 	}
 
-	privOnionKey, err := onionutil.GenerateOnionKey(onionutil.KeystreamReader([]byte(onionPassphrase), []byte("tulp-onion-keygen")))
-	if err != nil {
-		critical(term, "Unable to generate onion key: %v", err)
-	}
-
-	onionPortSpec := []bulb.OnionPortSpec{bulb.OnionPortSpec{80,
-		strconv.FormatUint((uint64)(freePort), 10)}}
-	onionInfo, err := c.AddOnion(onionPortSpec, privOnionKey, true)
-	if err != nil {
-		critical(term, "Error occured: %v", err)
-	}
-	info(term, "You're at %v.onion", onionInfo.OnionID)
 	/*
 		showIncoming := func() {
 			for {
@@ -165,7 +171,12 @@ func main() {
 	}()
 
 	for {
-		term.SetPrompt("> ")
+		promptPrefix := ""
+		if currentTalk != nil {
+			promptPrefix = currentTalk.GetBestName()
+		}
+		term.SetPrompt(fmt.Sprintf("%s > ", promptPrefix))
+
 		input, err := term.ReadLine()
 		if err != nil {
 			critical(term, "Unable to read line from terminal: %v", err)
@@ -181,7 +192,6 @@ func main() {
 			case "":
 				if talk, ok := activeTalks[args[1]]; ok {
 					currentTalk = talk
-					term.SetPrompt(fmt.Sprintf("%s > ", talk.GetBestName()))
 				} else {
 					warn(term, "No such talk")
 				}
@@ -204,8 +214,7 @@ func main() {
 					alert(term, "Unable to connect")
 					break
 				}
-				talk := NewTalk(ws)
-				activeTalks[talk.GetBestName()] = talk
+				_ := NewTalk(ws)
 			default:
 				warn(term, "No such command.")
 			}
