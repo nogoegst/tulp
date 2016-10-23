@@ -32,7 +32,7 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	go func(){
 		for {
 			inMsg := <-talk.incoming
-			ToTerm <- fmt.Sprintf("%s: %s", talk.GetBestName(), inMsg)
+			info(term, "%s: %s", talk.GetBestName(), inMsg)
 		}
 	}()
 }
@@ -159,19 +159,6 @@ func main() {
 		}
 		info(term, "You're at %v.onion", onionInfo.OnionID)
 	}
-
-	/*
-		showIncoming := func() {
-			for {
-			}
-		}
-		go showIncoming()
-	*/
-	go func() {
-		for {
-			info(term, <-ToTerm)
-		}
-	}()
 
 	for {
 		promptPrefix := ""

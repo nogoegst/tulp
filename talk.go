@@ -61,7 +61,6 @@ var (
 	privKey     *otr3.DSAPrivateKey
 	addressBook = make(AddressBook)
 	activeTalks = make(map[string]*Talk)
-	ToTerm      = make(chan string)
 	upgrader    = websocket.Upgrader{}
 )
 
