@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/twstrike/otr3"
@@ -16,7 +15,6 @@ type Talk struct {
 	lastKnownName string
 	Conversation  *otr3.Conversation
 	WebSocket     *websocket.Conn
-	wg            *sync.WaitGroup
 	toSend        []otr3.ValidMessage
 	incoming      []string
 	outgoing      []string
@@ -24,10 +22,13 @@ type Talk struct {
 }
 
 func (talk *Talk) GetBestName() (name string) {
-	fp := talk.Conversation.GetTheirKey().Fingerprint()
-	name = LookUpAddressBookByFingerprint(&addressBook, fp)
-	if name == "" {
-		name = fmt.Sprintf("%x", fp)
+	theirKey := talk.Conversation.GetTheirKey()
+	if theirKey != nil {
+		fp := theirKey.Fingerprint()
+		name = LookUpAddressBookByFingerprint(&addressBook, fp)
+		if name == "" {
+			name = fmt.Sprintf("%x", fp)
+		}
 	}
 	talk.lastKnownName = name
 	return name
@@ -41,7 +42,7 @@ var (
 	upgrader    = websocket.Upgrader{}
 )
 
-func OTRReceive(talk *Talk) {
+func (talk *Talk) OTRReceiveLoop() {
 	for !talk.finished {
 		mt, data, err := talk.WebSocket.ReadMessage()
 		if mt != websocket.TextMessage {
@@ -65,9 +66,9 @@ func OTRReceive(talk *Talk) {
 	}
 Finish:
 	talk.finished = true
-	talk.wg.Done()
+	//talk.wg.Done()
 }
-func OTRSend(talk *Talk) {
+func (talk *Talk) OTRSendLoop() {
 	for !talk.finished {
 		if len(talk.outgoing) > 0 {
 			outMsg := talk.outgoing[0]
@@ -92,14 +93,12 @@ func OTRSend(talk *Talk) {
 	}
 Finish:
 	talk.finished = true
-	talk.wg.Done()
+	//talk.wg.Done()
 }
 
 func (talk *Talk) HandleSecurityEvent(event otr3.SecurityEvent) {
-	log.Printf("%v", event.String())
 	switch event {
 	case otr3.GoneSecure:
-		log.Printf("name: %v", talk.GetBestName())
 		activeTalks[talk.GetBestName()] = talk
 	case otr3.GoneInsecure:
 		delete(activeTalks, talk.lastKnownName)
