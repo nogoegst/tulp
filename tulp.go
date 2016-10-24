@@ -8,11 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nogoegst/onionutil"
 	"github.com/gorilla/websocket"
 	"github.com/twstrike/otr3"
-	"github.com/nogoegst/bulb"
-	bulb_utils "github.com/nogoegst/bulb/utils"
-	"github.com/nogoegst/onionutil"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/proxy"
 )
@@ -67,20 +65,21 @@ func connectToOnion(onionAddress string) () {
 		alert(term, "Unable to connect")
 		return
 	}
-	_ = NewTalk(ws)
+	talk := NewTalk(ws)
+	talk.outgoing <- ""
 }
 
 func main() {
-	var debug_flag = flag.Bool("debug", false,
+	var debugFlag = flag.Bool("debug", false,
 		"Show what's happening")
-	var localFlag = flag.Bool("local", false,
+	var noOnionFlag = flag.Bool("no-onion", false,
 		"Run locally (offline)")
 	var control = flag.String("control-addr", "tcp://127.0.0.1:9051",
 		"Set Tor control address to be used")
-	var control_passwd = flag.String("control-passwd", "",
+	var controlPassword = flag.String("control-passwd", "",
 		"Set Tor control auth password")
 	flag.Parse()
-	debug := *debug_flag
+	debug := *debugFlag
 
 	oldTermState, err := terminal.MakeRaw(0)
 	if err != nil {
@@ -96,10 +95,13 @@ func main() {
 
 	info(term, "Welcome to tulip!")
 
-	// Parse control string
-	control_net, control_addr, err := bulb_utils.ParseControlPortString(*control)
-	if err != nil {
-		critical(term, "Failed to parse Tor control address string: %v", err)
+	localPort := strconv.FormatUint((uint64) (GetPort()), 10)
+	if !(*noOnionFlag) {
+		onionAddr, err := MakeOnion(*control, *controlPassword, localPort, debug)
+		if err != nil {
+			critical(term, "%v", err)
+		}
+		info(term, "You're at %v.onion", onionAddr)
 	}
 
 	otrPassphrase, err := term.ReadPassword(fmt.Sprintf("Enter your passphrase for OTR identity: "))
@@ -112,8 +114,6 @@ func main() {
 	if err != nil {
 		critical(term, "Unable to generate DSA key: %v", err)
 	}
-	//privKey.Generate(rand.Reader)
-	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
 	info(term, "Our fingerprint: %x", privKey.Fingerprint())
 
 	var currentTalk *Talk
@@ -121,55 +121,11 @@ func main() {
 	http.HandleFunc("/tulip", IncomingTalkHandler)
 	http.Handle("/", http.FileServer(http.Dir("webroot")))
 
-	freePort := GetPort()
-	info(term, "gotPort: %d", freePort)
-	go http.ListenAndServe(fmt.Sprintf(":%d", freePort), nil)
 
-	if !(*localFlag) {
-		// Connect to a running tor instance.
-		c, err := bulb.Dial(control_net, control_addr)
-		if err != nil {
-			critical(term, "Failed to connect to control socket: %v", err)
-		}
-		defer c.Close()
+	/* Start things */
+	info(term, "Listening on 127.0.0.1:%s", localPort)
+	go http.ListenAndServe(fmt.Sprintf(":%s", localPort), nil)
 
-		// See what's really going on under the hood.
-		// Do not enable in production.
-		c.Debug(debug)
-
-		// Authenticate with the control port.  The password argument
-		// here can be "" if no password is set (CookieAuth, no auth).
-		if err := c.Authenticate(*control_passwd); err != nil {
-			critical(term, "Authentication failed: %v", err)
-		}
-
-		// At this point, c.Request() can be used to issue requests.
-		resp, err := c.Request("GETINFO version")
-		if err != nil {
-			critical(term, "GETINFO version failed: %v", err)
-		}
-		info(term, "We're using tor %v", resp.Data[0])
-
-		c.StartAsyncReader()
-
-		onionPassphrase, err := term.ReadPassword(fmt.Sprintf("Enter your passphrase for onion identity: "))
-		if err != nil {
-			critical(term, "Unable to read onion passphrase: %v", err)
-		}
-
-		privOnionKey, err := onionutil.GenerateOnionKey(onionutil.KeystreamReader([]byte(onionPassphrase), []byte("tulp-onion-keygen")))
-		if err != nil {
-			critical(term, "Unable to generate onion key: %v", err)
-		}
-
-		onionPortSpec := []bulb.OnionPortSpec{bulb.OnionPortSpec{80,
-			strconv.FormatUint((uint64)(freePort), 10)}}
-		onionInfo, err := c.AddOnion(onionPortSpec, privOnionKey, true)
-		if err != nil {
-			critical(term, "Error occured: %v", err)
-		}
-		info(term, "You're at %v.onion", onionInfo.OnionID)
-	}
 	go func(){
 		for {
 			connected := <-connectEvent
