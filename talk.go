@@ -47,10 +47,10 @@ func NewTalk(ws *websocket.Conn) (talk *Talk) {
 func (talk *Talk) GetBestName() (name string) {
 	theirKey := talk.Conversation.GetTheirKey()
 	if theirKey != nil {
-		fp := theirKey.Fingerprint()
-		name = LookUpAddressBookByFingerprint(&addressBook, fp)
+		fp := fmt.Sprintf("%x", theirKey.Fingerprint())
+		name = LookUpAddressBookByEntryValue(&addressBook, fp)
 		if name == "" {
-			name = fmt.Sprintf("%x", fp)
+			name = fp
 		}
 	}
 	talk.lastKnownName = name

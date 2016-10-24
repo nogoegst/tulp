@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"net/http"
@@ -106,11 +105,6 @@ func main() {
 	//log.Printf(base64.RawStdEncoding.EncodeToString(privKey.Serialize(nil)))
 	info(term, "Our fingerprint: %x", privKey.Fingerprint())
 
-	browserFP, _ := hex.DecodeString("2264d806e7789a5773bdaffb798bcf3fdb456a81")
-	browserP := Person{OTRFingerprints: [][]byte{browserFP}}
-	addressBook["browser"] = browserP
-	info(term, "%v", addressBook)
-
 	var currentTalk *Talk
 
 	http.HandleFunc("/tulip", IncomingTalkHandler)
@@ -191,6 +185,19 @@ func main() {
 				} else {
 					warn(term, "No such talk")
 				}
+			case "appendid":
+				if len(args) != 3 {
+					warn(term, "This command needs 2 arguments")
+					break
+				}
+				name := args[1]
+				id := args[2]
+				idType := "otr-fp"
+				abEntry := AddressBookEntry{Value: id, Type: idType}
+				if _, ok := addressBook[name]; !ok {
+					addressBook[name] = Person{}
+				}
+				addressBook[name] = append(addressBook[name], abEntry)
 			case "connect":
 				if !strings.HasSuffix(args[1], ".onion") { //check existence!
 					warn(term, "It's not an onion address.")
