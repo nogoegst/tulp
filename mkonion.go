@@ -3,14 +3,26 @@ package main
 import(
 	"fmt"
 
+	"golang.org/x/net/proxy"
 	"github.com/nogoegst/onionutil"
 	"github.com/nogoegst/bulb"
 	bulbUtils "github.com/nogoegst/bulb/utils"
 )
 
-func MakeOnion(control, controlPassword, localPort string, debug bool) (onion string, err error) {
+type TorConfig struct {
+	SocksAddr	string
+	Control		string
+	ControlPassword	string
+	Debug		bool
+}
+
+func (tc TorConfig) GetTorDialer() (proxy.Dialer, error) {
+	return proxy.SOCKS5("tcp", tc.SocksAddr, nil, proxy.Direct)
+}
+
+func (tc TorConfig) MakeOnion(localPort string) (onion string, err error) {
 	// Parse control string
-	controlNet, controlAddr, err := bulbUtils.ParseControlPortString(control)
+	controlNet, controlAddr, err := bulbUtils.ParseControlPortString(tc.Control)
 	if err != nil {
 		err = fmt.Errorf("Failed to parse Tor control address string: %v", err)
 	return
@@ -25,11 +37,11 @@ func MakeOnion(control, controlPassword, localPort string, debug bool) (onion st
 
 	// See what's really going on under the hood.
 	// Do not enable in production.
-	c.Debug(debug)
+	c.Debug(tc.Debug)
 
 	// Authenticate with the control port.  The password argument
 	// here can be "" if no password is set (CookieAuth, no auth).
-	if err = c.Authenticate(controlPassword); err != nil {
+	if err = c.Authenticate(tc.ControlPassword); err != nil {
 		err = fmt.Errorf("Authentication failed: %v", err)
 		return
 	}

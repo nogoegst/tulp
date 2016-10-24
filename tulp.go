@@ -12,7 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/twstrike/otr3"
 	"golang.org/x/crypto/ssh/terminal"
-	"golang.org/x/net/proxy"
 )
 
 var(
@@ -51,11 +50,10 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-func connectToOnion(onionAddress string) () {
+func connectToOnion(torConfig TorConfig, onionAddress string) () {
 	url := "ws://" + onionAddress + "/tulip"
-	torDialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9050", nil, proxy.Direct)
+	torDialer, err := torConfig.GetTorDialer()
 	if err != nil {
-		alert(term, "Unable to create a tor dialer: %v", err)
 		return
 	}
 	dialer := websocket.Dialer{NetDial: torDialer.Dial}
@@ -73,13 +71,17 @@ func main() {
 	var debugFlag = flag.Bool("debug", false,
 		"Show what's happening")
 	var noOnionFlag = flag.Bool("no-onion", false,
-		"Run locally (offline)")
-	var control = flag.String("control-addr", "tcp://127.0.0.1:9051",
+		"Run without making onion address")
+	var control = flag.String("control-addr", "tcp://127.0.0.1:9151",
+		"Set Tor control address to be used")
+	var proxyAddr = flag.String("proxy-addr", "127.0.0.1:9150",
 		"Set Tor control address to be used")
 	var controlPassword = flag.String("control-passwd", "",
 		"Set Tor control auth password")
 	flag.Parse()
 	debug := *debugFlag
+
+	torConfig := TorConfig{SocksAddr: *proxyAddr, Control: *control, ControlPassword: *controlPassword, Debug: debug}
 
 	oldTermState, err := terminal.MakeRaw(0)
 	if err != nil {
@@ -97,7 +99,7 @@ func main() {
 
 	localPort := strconv.FormatUint((uint64) (GetPort()), 10)
 	if !(*noOnionFlag) {
-		onionAddr, err := MakeOnion(*control, *controlPassword, localPort, debug)
+		onionAddr, err := torConfig.MakeOnion(localPort)
 		if err != nil {
 			critical(term, "%v", err)
 		}
@@ -185,7 +187,7 @@ func main() {
 					break
 				}
 				onionAddress := args[1]
-				go connectToOnion(onionAddress)
+				go connectToOnion(torConfig, onionAddress)
 			default:
 				warn(term, "No such command.")
 			}
