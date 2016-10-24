@@ -25,6 +25,16 @@ var(
 	addressBook = make(AddressBook)
 )
 
+func updateTalkMap() {
+	for key, talk := range activeTalks {
+		newKey := talk.GetBestName()
+		if key != newKey {
+			delete(activeTalks, key)
+			activeTalks[newKey] = talk
+		}
+	}
+}
+
 func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -161,6 +171,8 @@ func main() {
 	}
 
 	for {
+		updateTalkMap()
+
 		promptPrefix := ""
 		if currentTalk != nil {
 			promptPrefix = currentTalk.GetBestName()
@@ -175,17 +187,23 @@ func main() {
 			cmdLine := strings.TrimPrefix(input, "/")
 			args := strings.Split(cmdLine, " ")
 			switch args[0] {
-			case "list":
+			case "lt": // List talks
 				for _, talk := range activeTalks {
 					info(term, "[*] %s", talk.GetBestName())
 				}
 			case "":
-				if talk, ok := activeTalks[args[1]]; ok {
-					currentTalk = talk
-				} else {
+				found := false
+				for _, talk := range activeTalks {
+					if args[1] == talk.GetBestName() {
+						currentTalk = talk
+						found = true
+						break
+					}
+				}
+				if !found {
 					warn(term, "No such talk")
 				}
-			case "appendid":
+			case "addab": // Add entry to the address book
 				if len(args) != 3 {
 					warn(term, "This command needs 2 arguments")
 					break
