@@ -111,6 +111,7 @@ func (talk *Talk) HandleSecurityEvent(event otr3.SecurityEvent) {
 	switch event {
 	case otr3.GoneSecure:
 		activeTalks[talk.GetBestName()] = talk
+		connectEvent <- talk.GetBestName()
 	case otr3.GoneInsecure:
 		delete(activeTalks, talk.lastKnownName)
 		talk.finished = true
