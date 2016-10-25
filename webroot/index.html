@@ -29,7 +29,10 @@
 		console.log(packedPrivKey)
 		myKey = DSA.parsePrivate(packedPrivKey);
 	}
-
+	var $scrolldown = function() {
+	    var elem = document.getElementById('chat');
+	    elem.scrollTop = elem.scrollHeight;
+	}
 	$log.text("Your OTR fingerprint is "+myKey.fingerprint());
        	var options = {
 	    fragment_size: 200
@@ -45,6 +48,7 @@
 	  $('<li class="list-group-item">').text(msg).appendTo($ul);
 	  console.log("message to display to the user: " + msg)
 	  // encrypted === true, if the received msg was encrypted
+	  $scrolldown();
 	})
 
 	buddy.on('io', function (msg, meta) {
@@ -73,9 +77,8 @@
 	    console.log("Outgoing message:" + data);
             $('<li class="list-group-item outgoing-msg">').text(data).appendTo($ul);
 	    $('#message').val("");
-	    var elem = document.getElementById('chat');
-	    elem.scrollTop = elem.scrollHeight;
           }
+	  $scrolldown();
         }
         $('#sendBtn').click($send);
 	$('#message').keypress(function(e) {
