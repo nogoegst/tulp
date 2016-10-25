@@ -46,7 +46,7 @@ func terminalMessage(term *terminal.Terminal, color []byte, msg string, critical
 
 func info(term *terminal.Terminal, format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
-	terminalMessage(term, term.Escape.Blue, msg, false)
+	terminalMessage(term, term.Escape.Green, msg, false)
 }
 func warn(term *terminal.Terminal, format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)

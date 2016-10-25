@@ -33,14 +33,10 @@ func updateTalkMap() {
 	}
 }
 
-func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
-	ws, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		warn(term, "Unable to upgrade: %v", err)
-		return
-	}
-	info(term, "New ws connection")
-	talk := NewTalk(ws)
+// MakeTalk creates a new Talk instance and launches
+// goroutines for UI.
+func MakeTalk(ws *websocket.Conn)(talk *Talk) {
+	talk = NewTalk(ws)
 	// Collect messages to terminal
 	go func(){
 		for {
@@ -48,6 +44,17 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 			info(term, "%s : %s", talk.GetBestName(), inMsg)
 		}
 	}()
+	return talk
+}
+
+func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		warn(term, "Unable to upgrade: %v", err)
+		return
+	}
+	info(term, "New ws connection")
+	MakeTalk(ws)
 }
 
 func connectToOnion(torConfig TorConfig, onionAddress string) () {
@@ -63,7 +70,7 @@ func connectToOnion(torConfig TorConfig, onionAddress string) () {
 		alert(term, "Unable to connect")
 		return
 	}
-	talk := NewTalk(ws)
+	talk := MakeTalk(ws)
 	talk.outgoing <- ""
 }
 

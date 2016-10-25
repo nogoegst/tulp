@@ -34,7 +34,6 @@ func NewTalk(ws *websocket.Conn) (talk *Talk) {
 	conversation := &otr3.Conversation{}
 	conversation.SetOurKeys([]otr3.PrivateKey{privKey})
 	conversation.Policies.RequireEncryption()
-	//c.Policies.AllowV2()
 	conversation.Policies.AllowV3()
 	conversation.SetSecurityEventHandler(talk)
 	talk.Conversation = conversation
