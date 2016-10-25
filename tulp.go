@@ -57,8 +57,8 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 	MakeTalk(ws)
 }
 
-func connectToOnion(torConfig TorConfig, onionAddress string) () {
-	url := "ws://" + onionAddress + "/tulip"
+func OutgoingTalkHandler(torConfig TorConfig, onionAddress string) () {
+	url := "ws://" + onionAddress + "/tulp"
 	torDialer, err := torConfig.GetTorDialer()
 	if err != nil {
 		return
@@ -102,7 +102,7 @@ func main() {
 	term.SetBracketedPasteMode(true)
 	defer term.SetBracketedPasteMode(false)
 
-	info(term, "Welcome to tulip!")
+	info(term, "Welcome to tulp!")
 
 	localPort := strconv.FormatUint((uint64) (GetPort()), 10)
 	if !(*noOnionFlag) {
@@ -127,7 +127,7 @@ func main() {
 
 	var currentTalk *Talk
 
-	http.HandleFunc("/tulip", IncomingTalkHandler)
+	http.HandleFunc("/tulp", IncomingTalkHandler)
 	http.Handle("/", http.FileServer(http.Dir("webroot")))
 
 
@@ -190,20 +190,20 @@ func main() {
 				addressBook[name] = append(addressBook[name], abEntry)
 			case "connect":
 				if !strings.HasSuffix(args[1], ".onion") { //check existence!
-					warn(term, "It's not an onion address.")
+					warn(term, "It's not an onion address")
 					break
 				}
 				onionAddress := args[1]
-				go connectToOnion(torConfig, onionAddress)
+				go OutgoingTalkHandler(torConfig, onionAddress)
 			default:
-				warn(term, "No such command.")
+				warn(term, "No such command")
 			}
 			continue
 		}
 		if currentTalk != nil {
 			currentTalk.outgoing <-input
 		} else {
-			warn(term, "There is no active talk.")
+			warn(term, "There is no active talk")
 		}
 	}
 }

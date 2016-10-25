@@ -1,7 +1,7 @@
 <html>
 	<head>
 		<meta charset="UTF-8" />
-		<title>tulip</title>
+		<title>tulp</title>
 		<link rel="stylesheet" href="bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u">
 		<link rel="stylesheet" href="style.css">
 		<script src="jquery-3.1.0.min.js"></script>
@@ -64,7 +64,7 @@
 
 
 	var $ul = $('#msg-list');
-        var ws = new WebSocket("ws://"+window.location.host+"/tulip");
+        var ws = new WebSocket("ws://"+window.location.host+"/tulp");
         ws.onmessage = function(e) {
           console.log("Incoming message:" + e.data);
           buddy.receiveMsg(e.data);

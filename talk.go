@@ -39,8 +39,8 @@ func NewTalk(ws *websocket.Conn) (talk *Talk) {
 	conversation.SetSecurityEventHandler(talk)
 	talk.Conversation = conversation
 
-	go talk.OTRReceiveLoop()
-	go talk.OTRSendLoop()
+	go talk.ReceiveLoop()
+	go talk.SendLoop()
 	return talk
 }
 
@@ -57,7 +57,7 @@ func (talk *Talk) GetBestName() (name string) {
 	return name
 }
 
-func (talk *Talk) OTRReceiveLoop() {
+func (talk *Talk) ReceiveLoop() {
 	for !talk.finished {
 		mt, data, err := talk.WebSocket.ReadMessage()
 		if err != nil {
@@ -82,7 +82,7 @@ func (talk *Talk) OTRReceiveLoop() {
 	}
 }
 
-func (talk *Talk) OTRSendLoop() {
+func (talk *Talk) SendLoop() {
 	for !talk.finished {
 		ticker := time.NewTicker(2*time.Second)
 		select {
