@@ -81,9 +81,9 @@ func (talk *Talk) OTRReceiveLoop() {
 }
 
 func (talk *Talk) OTRSendLoop() {
-	go func(){
-		for !talk.finished {
-			outMsg := <-talk.outgoing
+	for !talk.finished {
+		select {
+		case outMsg := <-talk.outgoing:
 			toSend, err := talk.Conversation.Send(otr3.ValidMessage(outMsg))
 			if err != nil {
 				log.Printf("Unable to process an outgoing message: %v", err)
@@ -91,11 +91,7 @@ func (talk *Talk) OTRSendLoop() {
 			for _, ciphertext := range toSend {
 				talk.toSend <- ciphertext
 			}
-		}
-	}()
-	go func(){
-		for !talk.finished {
-			msgToSend := <-talk.toSend
+		case msgToSend := <-talk.toSend:
 			err := talk.WebSocket.WriteMessage(websocket.TextMessage,
 				msgToSend)
 			if err != nil {
@@ -103,7 +99,7 @@ func (talk *Talk) OTRSendLoop() {
 				continue
 			}
 		}
-	}()
+	}
 }
 
 func (talk *Talk) HandleSecurityEvent(event otr3.SecurityEvent) {
