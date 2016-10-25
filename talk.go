@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/twstrike/otr3"
@@ -82,6 +83,7 @@ func (talk *Talk) OTRReceiveLoop() {
 
 func (talk *Talk) OTRSendLoop() {
 	for !talk.finished {
+		ticker := time.NewTicker(2*time.Second)
 		select {
 		case outMsg := <-talk.outgoing:
 			toSend, err := talk.Conversation.Send(otr3.ValidMessage(outMsg))
@@ -98,6 +100,10 @@ func (talk *Talk) OTRSendLoop() {
 				talk.finished = true
 				continue
 			}
+		case <-ticker.C:
+			talk.WebSocket.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second))
+			ticker.Stop()
+			ticker = time.NewTicker(2*time.Second)
 		}
 	}
 }
