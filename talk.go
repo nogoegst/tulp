@@ -60,23 +60,24 @@ func (talk *Talk) GetBestName() (name string) {
 func (talk *Talk) OTRReceiveLoop() {
 	for !talk.finished {
 		mt, data, err := talk.WebSocket.ReadMessage()
-		if mt != websocket.TextMessage {
-			talk.finished = true
-			continue
-		}
 		if err != nil {
 			talk.finished = true
-			continue
+			talk.WebSocket.Close()
 		}
-		msg, toSend, err := talk.Conversation.Receive(data)
-		if err != nil {
-			log.Printf("Unable to recieve OTR message: %v", err)
-		}
-		for _, ciphertext := range toSend {
-			talk.toSend <- ciphertext
-		}
-		if len(msg) > 0 {
-			talk.incoming <- string(msg)
+		switch(mt) {
+		case websocket.TextMessage:
+			msg, toSend, err := talk.Conversation.Receive(data)
+			if err != nil {
+				log.Printf("Unable to recieve OTR message: %v", err)
+			}
+			for _, ciphertext := range toSend {
+				talk.toSend <- ciphertext
+			}
+			if len(msg) > 0 {
+				talk.incoming <- string(msg)
+			}
+		default:
+			log.Printf("Unknown ws frame recieved\n\r")
 		}
 	}
 }
