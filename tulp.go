@@ -79,7 +79,7 @@ func main() {
 		"Show what's happening")
 	var noOnionFlag = flag.Bool("no-onion", false,
 		"Run without making onion address")
-	var control = flag.String("control-addr", "tcp://127.0.0.1:9151",
+	var control = flag.String("control-addr", "default://",
 		"Set Tor control address to be used")
 	var proxyAddr = flag.String("proxy-addr", "127.0.0.1:9150",
 		"Set Tor control address to be used")

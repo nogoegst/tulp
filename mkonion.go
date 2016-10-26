@@ -6,7 +6,6 @@ import(
 	"golang.org/x/net/proxy"
 	"github.com/nogoegst/onionutil"
 	"github.com/nogoegst/bulb"
-	bulbUtils "github.com/nogoegst/bulb/utils"
 )
 
 type TorConfig struct {
@@ -16,20 +15,14 @@ type TorConfig struct {
 	Debug		bool
 }
 
+// XXX: Rewrite to use Dialer from bulb
 func (tc TorConfig) GetTorDialer() (proxy.Dialer, error) {
 	return proxy.SOCKS5("tcp", tc.SocksAddr, nil, proxy.Direct)
 }
 
 func (tc TorConfig) MakeOnion(localPort string) (onion string, err error) {
-	// Parse control string
-	controlNet, controlAddr, err := bulbUtils.ParseControlPortString(tc.Control)
-	if err != nil {
-		err = fmt.Errorf("Failed to parse Tor control address string: %v", err)
-	return
-	}
-
 	// Connect to a running tor instance.
-	c, err := bulb.Dial(controlNet, controlAddr)
+	c, err := bulb.DialURL(tc.Control)
 	if err != nil {
 		err = fmt.Errorf("Failed to connect to control socket: %v", err)
 		return
