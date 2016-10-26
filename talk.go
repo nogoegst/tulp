@@ -20,7 +20,7 @@ type Talk struct {
 	toSend        chan otr3.ValidMessage
 	incoming      chan string
 	outgoing      chan string
-	finished      bool
+	active      chan bool
 }
 
 
@@ -30,6 +30,8 @@ func NewTalk(ws *websocket.Conn) (talk *Talk) {
 	talk.outgoing = make(chan string, messageBacklog)
 	talk.incoming = make(chan string, messageBacklog)
 	talk.toSend = make(chan otr3.ValidMessage, messageBacklog)
+	talk.active = make(chan bool)
+
 	talk.WebSocket = ws
 
 	conversation := &otr3.Conversation{}
@@ -39,8 +41,7 @@ func NewTalk(ws *websocket.Conn) (talk *Talk) {
 	conversation.SetSecurityEventHandler(talk)
 	talk.Conversation = conversation
 
-	go talk.ReceiveLoop()
-	go talk.SendLoop()
+	go talk.TalkLoop()
 	return talk
 }
 
@@ -57,12 +58,30 @@ func (talk *Talk) GetBestName() (name string) {
 	return name
 }
 
+func (talk *Talk) TalkLoop() {
+	go talk.ReceiveLoop()
+	go talk.SendLoop()
+
+	<-talk.active
+	talk.WebSocket.Close()
+	// If there was an OTR session
+	if talk.lastKnownName != "" {
+		connectEventChan <-ConnectEvent{connected: false, talk: talk}
+	}
+}
+
 func (talk *Talk) ReceiveLoop() {
-	for !talk.finished {
+	for {
+	select {
+	case active := <-talk.active:
+		if !active {
+			return
+		}
+	default:
 		mt, data, err := talk.WebSocket.ReadMessage()
 		if err != nil {
-			talk.finished = true
-			talk.WebSocket.Close()
+			close(talk.active)
+			return
 		}
 		switch(mt) {
 		case websocket.TextMessage:
@@ -80,12 +99,17 @@ func (talk *Talk) ReceiveLoop() {
 			log.Printf("Unknown ws frame recieved\n\r")
 		}
 	}
+	}
 }
 
 func (talk *Talk) SendLoop() {
-	for !talk.finished {
+	for {
 		ticker := time.NewTicker(2*time.Second)
 		select {
+		case active := <-talk.active:
+			if !active {
+				return
+			}
 		case outMsg := <-talk.outgoing:
 			toSend, err := talk.Conversation.Send(otr3.ValidMessage(outMsg))
 			if err != nil {
@@ -98,8 +122,8 @@ func (talk *Talk) SendLoop() {
 			err := talk.WebSocket.WriteMessage(websocket.TextMessage,
 				msgToSend)
 			if err != nil {
-				talk.finished = true
-				continue
+				close(talk.active)
+				return
 			}
 		case <-ticker.C:
 			talk.WebSocket.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second))
@@ -109,14 +133,18 @@ func (talk *Talk) SendLoop() {
 	}
 }
 
+type ConnectEvent struct {
+	connected	bool
+	talk		*Talk
+}
+
+
 func (talk *Talk) HandleSecurityEvent(event otr3.SecurityEvent) {
 	switch event {
 	case otr3.GoneSecure:
-		activeTalks[talk.GetBestName()] = talk
-		connectEvent <- talk.GetBestName()
+		connectEventChan <- ConnectEvent{connected: true, talk: talk}
 	case otr3.GoneInsecure:
-		delete(activeTalks, talk.lastKnownName)
-		talk.finished = true
+		close(talk.active)
 	}
 }
 

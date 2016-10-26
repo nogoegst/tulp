@@ -18,7 +18,7 @@ var(
 	term *terminal.Terminal
 	upgrader = websocket.Upgrader{}
 	activeTalks = make(map[string]*Talk)
-	connectEvent = make(chan string)
+	connectEventChan = make(chan ConnectEvent)
 	privKey     *otr3.DSAPrivateKey
 	addressBook = make(AddressBook)
 )
@@ -53,7 +53,7 @@ func IncomingTalkHandler(w http.ResponseWriter, r *http.Request) {
 		warn(term, "Unable to upgrade: %v", err)
 		return
 	}
-	info(term, "New ws connection")
+	info(term, "[debug] new ws connection")
 	MakeTalk(ws)
 }
 
@@ -137,11 +137,18 @@ func main() {
 
 	go func(){
 		for {
-			connected := <-connectEvent
-			alert(term, "%s has connected", connected)
+			connEvent := <-connectEventChan
+	                if connEvent.connected {
+				alert(term, "%s has connected", connEvent.talk.GetBestName())
+				activeTalks[connEvent.talk.GetBestName()] = connEvent.talk
+			} else {
+				alert(term, "%s has disconnected", connEvent.talk.GetBestName())
+				delete(activeTalks, connEvent.talk.GetBestName())
+			}
 		}
 	}()
 
+	/* Main UI loop */
 	for {
 		updateTalkMap()
 
